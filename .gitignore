@@ -1,0 +1,11 @@
+﻿# Build outputs
+**/bin/
+**/obj/
+
+# Arduino build
+*.bin
+
+# VS
+.vs/
+*.user
+*.suo
