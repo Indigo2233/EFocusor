@@ -41,6 +41,9 @@ struct FocuserSettings {
   bool reversed;
   char staSsid[32];
   char staPassword[64];
+  char staIp[16];       // static IP, empty = DHCP
+  char staGateway[16];
+  char staSubnet[16];
   long homeOffsetSteps;
   bool tempComp;
   float tempCoeff;
@@ -149,6 +152,9 @@ input{width:100%;background:#121720;color:var(--text);border:1px solid var(--lin
 <label>Temp Coeff<input id="tempCoeff" type="number" step="0.01"></label>
 <label>STA SSID<input id="staSsid" type="text" maxlength="31"></label>
 <label>STA Password<input id="staPassword" type="password" maxlength="63"></label>
+<label>Static IP<input id="staIp" type="text" maxlength="15" placeholder="DHCP if empty"></label>
+<label>Gateway<input id="staGateway" type="text" maxlength="15" placeholder="192.168.4.1"></label>
+<label>Subnet<input id="staSubnet" type="text" maxlength="15" placeholder="255.255.255.0"></label>
 <button class="primary wide" id="saveSettings">Save settings</button>
 <div class="small wide" id="network"></div>
 </div>
@@ -180,6 +186,9 @@ function setState(s){
  $('manualStep').value=s.manualStep??50;
  $('tempCoeff').value=(s.tempCoeff??0).toFixed(2);
  if(document.activeElement!==$('staSsid'))$('staSsid').value=s.staSsid||'';
+ if(document.activeElement!==$('staIp'))$('staIp').value=s.staIp||'';
+ if(document.activeElement!==$('staGateway'))$('staGateway').value=s.staGateway||'';
+ if(document.activeElement!==$('staSubnet'))$('staSubnet').value=s.staSubnet||'';
  const staIp=s.staIp&&s.staIp!=='0.0.0.0'?s.staIp:'not connected';
  $('network').textContent='AP: '+(s.apIp||'192.168.4.1')+' | STA: '+staIp+' | TCP: '+(s.tcpPort||4030);
 }
@@ -208,6 +217,9 @@ $('saveSettings').onclick=()=>{
  };
  if($('staSsid').value.trim())body.staSsid=$('staSsid').value.trim();
  if($('staPassword').value)body.staPassword=$('staPassword').value;
+ if($('staIp').value.trim())body.staIp=$('staIp').value.trim();
+ if($('staGateway').value.trim())body.staGateway=$('staGateway').value.trim();
+ if($('staSubnet').value.trim())body.staSubnet=$('staSubnet').value.trim();
  api('/api/settings',body).then(setState);
 };
 // Red light (night) mode - persisted in localStorage
@@ -391,6 +403,12 @@ String statusJson() {
   json += ipToString(WiFi.localIP());
   json += "\",\"staSsid\":\"";
   json += settings.staSsid;
+  json += "\",\"staIp\":\"";
+  json += settings.staIp;
+  json += "\",\"staGateway\":\"";
+  json += settings.staGateway;
+  json += "\",\"staSubnet\":\"";
+  json += settings.staSubnet;
   json += "\",\"tcpPort\":";
   json += ASCOM_TCP_PORT;
   json += "}";
@@ -674,12 +692,22 @@ void handleSettingsPostApi() {
   bool staChanged = false;
   staChanged |= extractString(body, "staSsid", settings.staSsid, sizeof(settings.staSsid));
   staChanged |= extractString(body, "staPassword", settings.staPassword, sizeof(settings.staPassword));
+  staChanged |= extractString(body, "staIp", settings.staIp, sizeof(settings.staIp));
+  staChanged |= extractString(body, "staGateway", settings.staGateway, sizeof(settings.staGateway));
+  staChanged |= extractString(body, "staSubnet", settings.staSubnet, sizeof(settings.staSubnet));
 
   applyMotionSettings();
   saveSettings();
   updateEnablePin();
 
   if (staChanged && strlen(settings.staSsid) > 0) {
+    IPAddress ip, gw, sn;
+    if (strlen(settings.staIp) > 0
+        && ip.fromString(settings.staIp)
+        && gw.fromString(settings.staGateway)
+        && sn.fromString(settings.staSubnet)) {
+      WiFi.config(ip, gw, sn);
+    }
     WiFi.begin(settings.staSsid, settings.staPassword);
   }
 
@@ -719,6 +747,14 @@ void setupWifi() {
   WiFi.softAPConfig(apIp, apGateway, apSubnet);
   WiFi.softAP(apSsid.c_str(), AP_PASSWORD);
   if (strlen(settings.staSsid) > 0) {
+    // Use static IP if configured, otherwise DHCP
+    IPAddress staIpAddr, staGw, staSn;
+    if (strlen(settings.staIp) > 0
+        && staIpAddr.fromString(settings.staIp)
+        && staGw.fromString(settings.staGateway)
+        && staSn.fromString(settings.staSubnet)) {
+      WiFi.config(staIpAddr, staGw, staSn);
+    }
     WiFi.begin(settings.staSsid, settings.staPassword);
   }
   tcpServer.begin();
