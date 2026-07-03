@@ -9,19 +9,21 @@
 #include <math.h>
 
 // Pin definitions - GPIO numbers for NodeMCU/Wemos D1 mini
-// D0=16, D1=5, D2=4, D3=0, D5=14, D6=12, D7=13
-#define STEP_PIN 5   // D1
-#define DIR_PIN 4    // D2
-#define ENABLE_PIN 14 // D5
-#define HALL_PIN 12   // D6
-#define CW_PIN 13     // D7
-#define CCW_PIN 0     // D3 (GPIO0) - NOT D0/GPIO16 (no internal pull-up!)
+// D0=16, D1=5, D2=4, D3=0, D4=2, D5=14, D6=12, D7=13
+#define IN1_PIN 5     // D1 -> ULN2003 IN1
+#define IN2_PIN 4     // D2 -> ULN2003 IN2
+#define IN3_PIN 14    // D5 -> ULN2003 IN3
+#define IN4_PIN 12    // D6 -> ULN2003 IN4
+#define CW_PIN 13     // D7, manual inward button
+#define CCW_PIN 0     // D3 (GPIO0), manual outward button. Must stay HIGH during boot.
 #define TEMP_PIN 2    // D4, DS18B20 DATA with 4.7k pull-up to 3.3V
+#define USE_HALL_SENSOR 0
+#define HALL_PIN 16   // D0, optional Hall input. Requires external 10k pull-up to 3.3V.
 
-#define DEVICE_RESPONSE "EFucoser ESP8266 Focuser ver 1001"
-#define FIRMWARE_VERSION 1001
+#define DEVICE_RESPONSE "EFucoser ESP8266 ULN2003 Focuser ver 1101"
+#define FIRMWARE_VERSION 1101
 #define EEPROM_SIZE 512
-#define SETTINGS_MAGIC 0xEF0C115EUL
+#define SETTINGS_MAGIC 0xEF0C2003UL
 #define ASCOM_TCP_PORT 4030
 #define WEBSOCKET_PORT 81
 #define MAX_TCP_CLIENTS 4
@@ -54,7 +56,7 @@ struct FocuserSettings {
 };
 
 FocuserSettings settings;
-AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
+AccelStepper stepper(AccelStepper::HALF4WIRE, IN1_PIN, IN3_PIN, IN2_PIN, IN4_PIN);
 ESP8266WebServer server(80);
 WebSocketsServer webSocket(WEBSOCKET_PORT);
 WiFiServer tcpServer(ASCOM_TCP_PORT);
@@ -266,12 +268,12 @@ void loadSettings() {
     memset(&settings, 0, sizeof(settings));
     settings.magic = SETTINGS_MAGIC;
     settings.position = 0;
-    settings.stepsPerRev = 200;
-    settings.maxSteps = 20000L;  // 200 steps/rev * 100 revs
+    settings.stepsPerRev = 8160;  // Typical 35BYJ46: 96 half-steps * 85 gearbox ratio
+    settings.maxSteps = 816000L;  // 100 output shaft revolutions
     settings.maxSpeed = 800;
     settings.acceleration = 1000;
-    settings.manualMoveStepSize = 50;
-    settings.findHomeStepSize = 100;
+    settings.manualMoveStepSize = 100;
+    settings.findHomeStepSize = 200;
     settings.hold = false;
     settings.reversed = false;
     settings.homeOffsetSteps = 0;
@@ -292,21 +294,40 @@ void loadSettings() {
 void applyMotionSettings() {
   stepper.setMaxSpeed(settings.maxSpeed);
   stepper.setAcceleration(settings.acceleration);
-  stepper.setPinsInverted(settings.reversed, false, false);
 }
 
-void updateEnablePin() {
-  if (stepper.distanceToGo() != 0 || settings.hold) {
-    digitalWrite(ENABLE_PIN, LOW);
+long driverToPhysicalSteps(long driverSteps) {
+  return settings.reversed ? -driverSteps : driverSteps;
+}
+
+long physicalToDriverSteps(long physicalSteps) {
+  return settings.reversed ? -physicalSteps : physicalSteps;
+}
+
+void setReversed(bool reversed) {
+  long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
+  long targetPhysical = driverToPhysicalSteps(stepper.targetPosition());
+  settings.reversed = reversed;
+  stepper.setCurrentPosition(physicalToDriverSteps(currentPhysical));
+  stepper.moveTo(physicalToDriverSteps(targetPhysical));
+}
+
+void updateMotorOutputs() {
+  if (stepper.distanceToGo() != 0 || findingHome || settings.hold) {
+    stepper.enableOutputs();
   } else {
-    digitalWrite(ENABLE_PIN, HIGH);
+    stepper.disableOutputs();
   }
 }
 
 // ==================== Position Helpers ====================
 
 bool hallTriggered() {
+#if USE_HALL_SENSOR
   return digitalRead(HALL_PIN) == LOW;
+#else
+  return false;
+#endif
 }
 
 long logicalToPhysicalSteps(long logicalSteps) {
@@ -327,7 +348,7 @@ void clampHomeOffset() {
 }
 
 void setCurrentLogicalPosition(long logicalSteps) {
-  settings.homeOffsetSteps = stepper.currentPosition() - logicalSteps;
+  settings.homeOffsetSteps = driverToPhysicalSteps(stepper.currentPosition()) - logicalSteps;
   clampHomeOffset();
 }
 
@@ -335,7 +356,8 @@ bool moveToPhysicalSteps(long target) {
   if (target < 0 || target > settings.maxSteps) {
     return false;
   }
-  stepper.moveTo(target);
+  stepper.enableOutputs();
+  stepper.moveTo(physicalToDriverSteps(target));
   positionSaved = false;
   return true;
 }
@@ -352,7 +374,7 @@ String boolText(bool value) {
 }
 
 String statusResponse() {
-  long pos = physicalToLogicalSteps(stepper.currentPosition());
+  long pos = physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition()));
   // Clamp to valid range [0, maxSteps]
   if (pos < 0) pos = 0;
   if (pos > settings.maxSteps) pos = settings.maxSteps;
@@ -373,9 +395,9 @@ String statusJson() {
   json += "\"firmware\":";
   json += FIRMWARE_VERSION;
   json += ",\"positionSteps\":";
-  json += physicalToLogicalSteps(stepper.currentPosition());
+  json += physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition()));
   json += ",\"targetSteps\":";
-  json += physicalToLogicalSteps(stepper.targetPosition());
+  json += physicalToLogicalSteps(driverToPhysicalSteps(stepper.targetPosition()));
   json += ",\"isMoving\":";
   json += boolText(stepper.distanceToGo() != 0 || findingHome);
   json += ",\"home\":";
@@ -472,17 +494,21 @@ String processCommand(String command) {
       broadcastStatus();
       return statusResponse();
     case 'H':
+#if USE_HALL_SENSOR
       findingHome = true;
       homeFound = false;
       broadcastStatus();
       return "H false#";
+#else
+      return "ERR:home_unavailable#";
+#endif
     case 'S':
       stepper.stop();
       findingHome = false;
       broadcastStatus();
       return "S#";
     case 'R':
-      settings.reversed = value != 0;
+      setReversed(value != 0);
       applyMotionSettings();
       saveSettings();
       broadcastStatus();
@@ -490,7 +516,7 @@ String processCommand(String command) {
     case 'C':
       settings.hold = value != 0;
       saveSettings();
-      updateEnablePin();
+      updateMotorOutputs();
       broadcastStatus();
       return String("hold = ") + boolText(settings.hold) + "#";
     case 'V':
@@ -622,7 +648,7 @@ void handleMoveApi() {
   if (extractNumber(body, "steps", value)) {
     ok = moveToLogicalSteps(lround(value));
   } else if (extractNumber(body, "relativeSteps", value)) {
-    long target = physicalToLogicalSteps(stepper.currentPosition()) + lround(value);
+    long target = physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition())) + lround(value);
     if (target < 0) target = 0;
     if (target > settings.maxSteps) target = settings.maxSteps;
     ok = moveToLogicalSteps(target);
@@ -695,7 +721,7 @@ void handleSettingsPostApi() {
     settings.hold = boolValue;
   }
   if (extractBool(body, "reversed", boolValue)) {
-    settings.reversed = boolValue;
+    setReversed(boolValue);
   }
   if (extractBool(body, "tempComp", boolValue)) {
     settings.tempComp = boolValue;
@@ -709,7 +735,7 @@ void handleSettingsPostApi() {
 
   applyMotionSettings();
   saveSettings();
-  updateEnablePin();
+  updateMotorOutputs();
 
   if (staChanged && strlen(settings.staSsid) > 0) {
     IPAddress ip, gw, sn;
@@ -862,7 +888,8 @@ void serviceHome() {
     return;
   }
   if (stepper.distanceToGo() == 0) {
-    stepper.moveTo(stepper.currentPosition() - settings.findHomeStepSize);
+    long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
+    moveToPhysicalSteps(currentPhysical - settings.findHomeStepSize);
   }
 }
 
@@ -925,10 +952,9 @@ void serviceTemperatureSensor() {
 // ==================== Setup & Loop ====================
 
 void setup() {
-  pinMode(STEP_PIN, OUTPUT);
-  pinMode(DIR_PIN, OUTPUT);
-  pinMode(ENABLE_PIN, OUTPUT);
-  pinMode(HALL_PIN, INPUT_PULLUP);
+#if USE_HALL_SENSOR
+  pinMode(HALL_PIN, INPUT);
+#endif
   pinMode(CW_PIN, INPUT_PULLUP);
   pinMode(CCW_PIN, INPUT_PULLUP);
 
@@ -942,7 +968,7 @@ void setup() {
   loadSettings();
   stepper.setCurrentPosition(settings.position);
   applyMotionSettings();
-  updateEnablePin();
+  updateMotorOutputs();
   setupTemperatureSensor();
 
   setupWifi();
@@ -970,7 +996,7 @@ void loop() {
   handleManualButtons();
   serviceHome();
   serviceTemperatureSensor();
-  updateEnablePin();
+  updateMotorOutputs();
   stepper.run();
 
   if (stepper.distanceToGo() == 0 && !positionSaved && !findingHome) {

@@ -386,20 +386,12 @@ namespace ASCOM.EFucoser
         {
             get
             {
-                try
-                {
-                    string resp = CommandString("I#", false);
-                    return resp.Contains("\"tempComp\":true");
-                }
-                catch
-                {
-                    return false;
-                }
+                tl.LogMessage("TempComp Get", false.ToString());
+                return false;
             }
             set
             {
-                CommandString("C " + (value ? "1" : "0") + "#", false);
-                tl.LogMessage("TempComp Set", value.ToString());
+                tl.LogMessage("TempComp Set Ignored", value.ToString());
             }
         }
 
@@ -407,8 +399,8 @@ namespace ASCOM.EFucoser
         {
             get
             {
-                tl.LogMessage("TempCompAvailable Get", true.ToString());
-                return true;
+                tl.LogMessage("TempCompAvailable Get", false.ToString());
+                return false;
             }
         }
 
@@ -420,7 +412,7 @@ namespace ASCOM.EFucoser
                 {
                     string resp = CommandString("I#", false);
                     // Extract lastTemp from JSON
-                    var match = System.Text.RegularExpressions.Regex.Match(resp, "\"lastTemp\":([0-9.]+)");
+                    var match = System.Text.RegularExpressions.Regex.Match(resp, "\"lastTemp\":(-?[0-9]+(?:\\.[0-9]+)?)");
                     if (match.Success)
                     {
                         double temp;
