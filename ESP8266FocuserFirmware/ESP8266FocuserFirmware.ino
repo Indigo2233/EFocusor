@@ -449,7 +449,7 @@ String processCommand(String command) {
   }
   command.trim();
   if (command.length() == 0) {
-    return "ERR:empty#";
+    return String(DEVICE_RESPONSE) + "#";
   }
 
   char code = command.charAt(0);

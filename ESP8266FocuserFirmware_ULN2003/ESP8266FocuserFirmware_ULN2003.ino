@@ -256,7 +256,7 @@ setInterval(refresh,5000);
 
 void saveSettings() {
   settings.magic = SETTINGS_MAGIC;
-  settings.position = stepper.currentPosition();
+  settings.position = driverToPhysicalSteps(stepper.currentPosition());
   EEPROM.put(0, settings);
   EEPROM.commit();
 }
@@ -471,7 +471,7 @@ String processCommand(String command) {
   }
   command.trim();
   if (command.length() == 0) {
-    return "ERR:empty#";
+    return String(DEVICE_RESPONSE) + "#";
   }
 
   char code = command.charAt(0);
@@ -859,8 +859,10 @@ void updateManualButton(int pin, int &lastState, bool &manualFlag, unsigned long
       // Edge-triggered: one move per press (prevents floating-pin runaway)
       manualFlag = true;
       if (!findingHome) {
-        stepper.move(direction * settings.manualMoveStepSize);
-        positionSaved = false;
+        long target = driverToPhysicalSteps(stepper.currentPosition()) + direction * settings.manualMoveStepSize;
+        if (target < 0) target = 0;
+        if (target > settings.maxSteps) target = settings.maxSteps;
+        moveToPhysicalSteps(target);
       }
     } else if (reading == HIGH) {
       manualFlag = false;
@@ -889,7 +891,13 @@ void serviceHome() {
   }
   if (stepper.distanceToGo() == 0) {
     long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
-    moveToPhysicalSteps(currentPhysical - settings.findHomeStepSize);
+    long target = currentPhysical - settings.findHomeStepSize;
+    if (target < 0) {
+      findingHome = false;
+      broadcastStatus();
+      return;
+    }
+    moveToPhysicalSteps(target);
   }
 }
 
@@ -966,7 +974,7 @@ void setup() {
   Serial.setTimeout(2000);
 
   loadSettings();
-  stepper.setCurrentPosition(settings.position);
+  stepper.setCurrentPosition(physicalToDriverSteps(settings.position));
   applyMotionSettings();
   updateMotorOutputs();
   setupTemperatureSensor();

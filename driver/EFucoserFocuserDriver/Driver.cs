@@ -29,6 +29,9 @@ namespace ASCOM.EFucoser
         // ASCOM identity
         internal static string driverID = "ASCOM.EFucoser.Focuser";
         private static string driverDescription = "ASCOM Focuser Driver for EFucoser ESP8266.";
+        private const string Esp8266FocuserIdentity = "EFucoser ESP8266 Focuser";
+        private const string Esp8266Uln2003FocuserIdentity = "EFucoser ESP8266 ULN2003 Focuser";
+        private const string ArduinoNanoUln2003FocuserIdentity = "EFucoser Arduino Nano ULN2003 Focuser";
 
         // Profile keys
         internal static string comPortProfileName = "COM Port";
@@ -206,6 +209,8 @@ namespace ASCOM.EFucoser
                             connectedState = true;
                             lastLink = true;
 
+                            ValidateDeviceIdentity();
+
                             // Send maxStep to firmware
                             if (IsTcpTransport())
                                 CommandString("D " + maxStep.ToString() + "#", false);
@@ -218,7 +223,7 @@ namespace ASCOM.EFucoser
                             string ver = CommandString("V#", false);
                             string verTrim = ver.Replace('#', ' ').Trim();
                             string versn = verTrim.Replace('V', ' ').Trim();
-                            tl.LogMessage("Firmware Version: ", versn);
+                            tl.LogMessage("Firmware Version", versn);
                         }
                         catch (Exception ex)
                         {
@@ -496,6 +501,34 @@ namespace ASCOM.EFucoser
             if (string.IsNullOrWhiteSpace(comPort))
                 throw new ASCOM.NotConnectedException("No COM port selected");
             return new SerialFocuserConnection(comPort);
+        }
+
+        private void ValidateDeviceIdentity()
+        {
+            string identity = CommandString("#", false).Replace('#', ' ').Trim();
+            tl.LogMessage("Device Identity", identity);
+
+            if (IsExpectedFocuserIdentity(identity))
+                return;
+
+            throw new ASCOM.NotConnectedException(
+                "Connected device is not an EFucoser focuser. Response: " + identity);
+        }
+
+        internal static bool IsExpectedFocuserIdentity(string identity)
+        {
+            if (string.IsNullOrWhiteSpace(identity))
+                return false;
+
+            return IsExpectedIdentityPrefix(identity, Esp8266FocuserIdentity)
+                || IsExpectedIdentityPrefix(identity, Esp8266Uln2003FocuserIdentity)
+                || IsExpectedIdentityPrefix(identity, ArduinoNanoUln2003FocuserIdentity);
+        }
+
+        private static bool IsExpectedIdentityPrefix(string identity, string expectedPrefix)
+        {
+            return string.Equals(identity, expectedPrefix, StringComparison.Ordinal)
+                || identity.StartsWith(expectedPrefix + " ver", StringComparison.Ordinal);
         }
 
         internal static int ParseInt(string value, int defaultValue)
