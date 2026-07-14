@@ -74,10 +74,14 @@ class SerialIO:
             self.log.info("Identity: %s", ident)
             if ident and "EFucoser" in ident:
                 return True
+            self.log.error("Identity mismatch: got %r", ident)
             self.disconnect()
             return False
         except Exception as e:
-            self.log.error("Serial connect: %s", e)
+            self.log.error("Serial connect exception: %s (%s)", e, type(e).__name__)
+            if self._s:
+                try: self._s.close()
+                except: pass
             self._s = None
             return False
 
@@ -294,6 +298,7 @@ class EFocuserINDI:
     # ── Connection ────────────────────────────────────────────────────
 
     def do_connect(self):
+        self.log.info("do_connect() called, port=%r, conn=%s", self.port, self.conn)
         if self.ser.connect(self.port):
             self.conn = True
             s = self.ser.full()
