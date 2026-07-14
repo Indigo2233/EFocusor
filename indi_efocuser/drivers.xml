@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<driversList>
+<devGroup group="Focusers">
+    <device label="EFucoser Focuser" manufacturer="EFucoser">
+        <driver name="EFucoser Focuser">indi_efocuser_focuser</driver>
+        <version>1.0</version>
+    </device>
+</devGroup>
+</driversList>

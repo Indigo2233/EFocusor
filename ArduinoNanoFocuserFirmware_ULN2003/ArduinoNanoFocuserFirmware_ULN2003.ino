@@ -157,43 +157,47 @@ String statusResponse() {
   return response;
 }
 
+void printStatusJson() {
+  Serial.print("{");
+  Serial.print("\"firmware\":");
+  Serial.print(FIRMWARE_VERSION);
+  Serial.print(",\"positionSteps\":");
+  Serial.print(physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition())));
+  Serial.print(",\"targetSteps\":");
+  Serial.print(physicalToLogicalSteps(driverToPhysicalSteps(stepper.targetPosition())));
+  Serial.print(",\"isMoving\":");
+  Serial.print(boolText(stepper.distanceToGo() != 0));
+  Serial.print(",\"home\":false");
+  Serial.print(",\"hold\":");
+  Serial.print(boolText(settings.hold));
+  Serial.print(",\"reversed\":");
+  Serial.print(boolText(settings.reversed));
+  Serial.print(",\"tempComp\":false");
+  Serial.print(",\"stepsPerRev\":");
+  Serial.print(settings.stepsPerRev);
+  Serial.print(",\"maxSteps\":");
+  Serial.print(settings.maxSteps);
+  Serial.print(",\"maxSpeed\":");
+  Serial.print(settings.maxSpeed);
+  Serial.print(",\"acceleration\":");
+  Serial.print(settings.acceleration);
+  Serial.print(",\"manualStep\":0");
+  Serial.print(",\"homeStep\":0");
+  Serial.print(",\"homeOffsetSteps\":");
+  Serial.print(settings.homeOffsetSteps);
+  Serial.print(",\"tempCoeff\":");
+  Serial.print(settings.tempCoeff, 2);
+  Serial.print(",\"lastTemp\":");
+  Serial.print(settings.lastTemp, 2);
+  Serial.print(",\"tempSensorPresent\":");
+  Serial.print(boolText(tempSensorPresent));
+  Serial.print(",\"transport\":\"serial\"");
+  Serial.print("}");
+}
+
 String statusJson() {
-  String json = "{";
-  json += "\"firmware\":";
-  json += FIRMWARE_VERSION;
-  json += ",\"positionSteps\":";
-  json += physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition()));
-  json += ",\"targetSteps\":";
-  json += physicalToLogicalSteps(driverToPhysicalSteps(stepper.targetPosition()));
-  json += ",\"isMoving\":";
-  json += boolText(stepper.distanceToGo() != 0);
-  json += ",\"home\":false";
-  json += ",\"hold\":";
-  json += boolText(settings.hold);
-  json += ",\"reversed\":";
-  json += boolText(settings.reversed);
-  json += ",\"tempComp\":false";
-  json += ",\"stepsPerRev\":";
-  json += settings.stepsPerRev;
-  json += ",\"maxSteps\":";
-  json += settings.maxSteps;
-  json += ",\"maxSpeed\":";
-  json += settings.maxSpeed;
-  json += ",\"acceleration\":";
-  json += settings.acceleration;
-  json += ",\"manualStep\":0";
-  json += ",\"homeStep\":0";
-  json += ",\"homeOffsetSteps\":";
-  json += settings.homeOffsetSteps;
-  json += ",\"tempCoeff\":";
-  json += String(settings.tempCoeff, 2);
-  json += ",\"lastTemp\":";
-  json += String(settings.lastTemp, 2);
-  json += ",\"tempSensorPresent\":";
-  json += boolText(tempSensorPresent);
-  json += ",\"transport\":\"serial\"";
-  json += "}";
-  return json;
+  printStatusJson();
+  return "";
 }
 
 long commandParameter(String command) {
@@ -250,7 +254,9 @@ String processCommand(String command) {
     case 'V':
       return String("V ") + FIRMWARE_VERSION + "#";
     case 'I':
-      return statusJson() + "#";
+      printStatusJson();
+      Serial.print("#");
+      return "";
     case 'D':
       if (value <= 0) {
         return "ERR:max_steps#";
@@ -267,6 +273,22 @@ String processCommand(String command) {
     case 'E':
       settings.lastTemp = value / 100.0F;
       return String("E ") + String(settings.lastTemp, 2) + "#";
+    case 'X':
+      if (value <= 0) {
+        return "ERR:speed#";
+      }
+      settings.maxSpeed = (int)value;
+      applyMotionSettings();
+      saveSettings();
+      return String("X ") + settings.maxSpeed + "#";
+    case 'A':
+      if (value <= 0) {
+        return "ERR:acceleration#";
+      }
+      settings.acceleration = (int)value;
+      applyMotionSettings();
+      saveSettings();
+      return String("A ") + settings.acceleration + "#";
     default:
       return String("ERR:") + code + "#";
   }

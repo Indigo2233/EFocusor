@@ -1,0 +1,3 @@
+#!/bin/bash
+# Wrapper to run INDI driver with venv Python (unbuffered)
+exec /home/suyao/codes/astro/EFocusor/.venv/bin/python -u /home/suyao/codes/astro/EFocusor/indi_efocuser/indi_efocuser_focuser.py "$@"
