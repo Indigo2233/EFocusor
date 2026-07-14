@@ -1,5 +1,20 @@
 # INDI Driver Problem Report
 
+## Resolution
+
+Resolved in driver version 1.1.0.
+
+- The driver now responds to `getProperties`, including device-wide and
+  property-specific requests. `indiserver` routes definitions according to
+  each client's request and does not replay previously emitted definitions.
+- Focuser vectors and elements now use the names from the INDI 2.2.3 focuser
+  interface, including `ABS_FOCUS_POSITION`, `REL_FOCUS_POSITION`,
+  `FOCUS_ABORT_MOTION`, and `FOCUS_REVERSE_MOTION`.
+- Absolute-position updates report `Busy` while the firmware is moving and
+  `Ok` after movement completes.
+- Protocol regression tests cover property discovery and standard absolute and
+  relative movement commands.
+
 ## Project
 - **Name**: EFucoser INDI Focuser Driver
 - **Repo**: https://github.com/Indigo2233/EFocusor

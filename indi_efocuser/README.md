@@ -10,17 +10,14 @@ EkOS / KStars, PHD2, and any INDI-compatible client on Linux.
 | **Speed** | `FOCUS_SPEED` | R/W | Max speed in steps/sec (1–2000) |
 | **Acceleration** | `ACCELERATION` | R/W | Acceleration in steps/sec² (10–10000) |
 | **Max Position** | `FOCUS_MAX` | R/W | Maximum position limit (steps) |
-| **Position** | `FOCUS_POSITION` | R/O | Current absolute position |
-| **Goto** | `FOCUS_ABSOLUTE_POSITION` | R/W | Target absolute position |
-| **Relative Move** | `FOCUS_RELATIVE_POSITION` | R/W | Relative move amount (±steps) |
+| **Absolute Position** | `ABS_FOCUS_POSITION` | R/W | Current position and absolute target |
+| **Relative Move** | `REL_FOCUS_POSITION` | R/W | Relative move amount in the selected direction |
 | **Direction** | `FOCUS_MOTION` | R/W | Inward / Outward for timer moves |
 | **Timer** | `FOCUS_TIMER` | R/W | Timer-based move duration (ms) |
-| **Reverse** | `REVERSE_MOTION` | R/W | Invert motor direction |
+| **Reverse** | `FOCUS_REVERSE_MOTION` | R/W | Invert motor direction |
 | **Hold** | `HOLD_MODE` | R/W | Continuous hold on/off |
 | **Temperature** | `FOCUS_TEMPERATURE` | R/O | DS18B20 temperature (°C) |
-| **Abort** | `ABORT_MOTION` | W | Halt movement immediately |
-| **Steps/Rev** | `STEPS_PER_REV` | R/O | Steps per output shaft revolution |
-| **Home** | `HOME` | W | Home action (unavailable on Nano variant) |
+| **Abort** | `FOCUS_ABORT_MOTION` | W | Halt movement immediately |
 
 ## Hardware
 
@@ -81,6 +78,11 @@ sudo ln -s $(pwd)/indi_efocuser_focuser.py /usr/share/indi/scripts/
 4. Click "Connect"
 
 The driver will auto-detect the focuser on the selected port.
+
+The driver follows the standard INDI focuser vector and element names used by
+Ekos and other clients. It also answers every matching `getProperties` request,
+so clients that connect after the driver starts receive the complete property
+definitions.
 
 ## Firmware Protocol
 

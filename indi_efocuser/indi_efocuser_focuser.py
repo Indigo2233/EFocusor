@@ -15,13 +15,23 @@ import serial, serial.tools.list_ports
 # ── Constants ────────────────────────────────────────────────────────────
 
 DEVICE = "EFucoser Focuser"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 BAUD = 9600
 TIMEOUT = 2.0
 DEF_MAX = 816000
 DEF_SPEED = 800
 DEF_ACCEL = 1000
 POLL_S = 0.5
+
+NUMBER_ELEMENTS = {
+    "FOCUS_SPEED": "FOCUS_SPEED_VALUE",
+    "ACCELERATION": "ACCELERATION_VALUE",
+    "FOCUS_MAX": "FOCUS_MAX_VALUE",
+    "ABS_FOCUS_POSITION": "FOCUS_ABSOLUTE_POSITION",
+    "REL_FOCUS_POSITION": "FOCUS_RELATIVE_POSITION",
+    "FOCUS_TIMER": "FOCUS_TIMER_VALUE",
+    "FOCUS_TEMPERATURE": "TEMPERATURE",
+}
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -62,7 +72,10 @@ class SerialIO:
             self._s.reset_input_buffer()
             ident = self.cmd("#")
             self.log.info("Identity: %s", ident)
-            return bool(ident and "EFucoser" in ident)
+            if ident and "EFucoser" in ident:
+                return True
+            self.disconnect()
+            return False
         except Exception as e:
             self.log.error("Serial connect: %s", e)
             self._s = None
@@ -88,11 +101,11 @@ class SerialIO:
 
     def status(self):
         r = self.cmd("G#")
-        if not r: return (0, False)
+        if not r: return None
         try:
             a = r.split(";")
             return (int(a[0].replace("P","").strip()), len(a)>1 and "true" in a[1])
-        except: return (0, False)
+        except: return None
 
     def full(self):
         r = self.cmd("I#")
@@ -137,7 +150,10 @@ class EFocuserINDI:
         self.hold = False
         self.temp = 20.0
         self.inward = False
-        self.port = "/dev/ttyUSB0"
+        self.active_motion = None
+        self.active_motion_value = 0
+        self.port = ""
+        self._out_lk = threading.Lock()
 
         self._pt = threading.Thread(target=self._poll, daemon=True)
 
@@ -151,8 +167,9 @@ class EFocuserINDI:
             self._write(f"<{tag} {a}{end}")
 
     def _write(self, s):
-        sys.stdout.write(s + "\n")
-        sys.stdout.flush()
+        with self._out_lk:
+            sys.stdout.write(s + "\n")
+            sys.stdout.flush()
 
     def _msg(self, m):
         self.log.info(m)
@@ -165,101 +182,94 @@ class EFocuserINDI:
 
     # ── Define Properties ─────────────────────────────────────────────
 
-    def define_all(self):
+    def define_all(self, requested=""):
         ts = now_ts()
+
+        def wanted(name):
+            return not requested or requested == name
 
         # DRIVER_INFO — required for indiserver to recognize device interface
         # FOCUSER_INTERFACE = 1 << 1 = 2
-        self._out("defTextVector", {
-            "device": DEVICE, "name": "DRIVER_INFO", "label": "Driver Info",
-            "group": "Info", "perm": "ro", "state": "Idle",
-            "timeout": "60", "timestamp": ts,
-        }, body=(
-            _txt("DRIVER_NAME", "Name", DEVICE) + "\n" +
-            _txt("DRIVER_EXEC", "Exec", "indi_efocuser_focuser") + "\n" +
-            _txt("DRIVER_VERSION", "Version", VERSION) + "\n" +
-            _txt("DRIVER_INTERFACE", "Interface", "2")
-        ))
+        if wanted("DRIVER_INFO"):
+            self._out("defTextVector", {
+                "device": DEVICE, "name": "DRIVER_INFO", "label": "Driver Info",
+                "group": "Connection", "perm": "ro", "state": "Idle",
+                "timeout": "60", "timestamp": ts,
+            }, body=(
+                _txt("DRIVER_NAME", "Name", DEVICE) + "\n" +
+                _txt("DRIVER_EXEC", "Exec", "indi_efocuser_focuser") + "\n" +
+                _txt("DRIVER_VERSION", "Version", VERSION) + "\n" +
+                _txt("DRIVER_INTERFACE", "Interface", "2")
+            ))
 
         # Port text
         ports = SerialIO.ports()
         p = ports[0] if ports else "/dev/ttyUSB0"
-        self.port = p
-        self._out("defTextVector", {
-            "device": DEVICE, "name": "DEVICE_PORT", "label": "Serial Port",
-            "group": "Connection", "perm": "rw", "state": "Idle",
-            "timeout": "60", "timestamp": ts,
-        }, body=_txt("TEXT", "Port", p))
+        if not self.port:
+            self.port = p
+        if wanted("DEVICE_PORT"):
+            self._out("defTextVector", {
+                "device": DEVICE, "name": "DEVICE_PORT", "label": "Serial Port",
+                "group": "Connection", "perm": "rw", "state": "Idle",
+                "timeout": "60", "timestamp": ts,
+            }, body=_txt("PORT", "Port", self.port))
 
         # Connection switch
-        self._out("defSwitchVector", {
-            "device": DEVICE, "name": "CONNECTION", "label": "Connection",
-            "group": "Connection", "perm": "rw", "rule": "OneOfMany",
-            "state": "Idle", "timeout": "60", "timestamp": ts,
-        }, body=_swn("CONNECT","Connect","Off")+"\n"+_swn("DISCONNECT","Disconnect","On"))
+        if wanted("CONNECTION"):
+            self._out("defSwitchVector", {
+                "device": DEVICE, "name": "CONNECTION", "label": "Connection",
+                "group": "Main Control", "perm": "rw", "rule": "OneOfMany",
+                "state": "Ok" if self.conn else "Idle", "timeout": "60", "timestamp": ts,
+            }, body=(
+                _swn("CONNECT", "Connect", "On" if self.conn else "Off") + "\n" +
+                _swn("DISCONNECT", "Disconnect", "Off" if self.conn else "On")
+            ))
 
-    def define_focus(self):
+    def define_focus(self, requested=""):
         ts = now_ts()
         mx = self.maxst
 
-        def _defN(name, label, group, fmt, mn, mxv, step, value, perm="rw"):
+        def wanted(name):
+            return not requested or requested == name
+
+        def _defN(name, element, label, group, fmt, mn, mxv, step, value, perm="rw"):
+            if not wanted(name):
+                return
             self._out("defNumberVector", {
                 "device":DEVICE,"name":name,"label":label,"group":group,
-                "perm":perm,"state":"Idle","timeout":"60","timestamp":ts,
-            }, body=_num("VALUE",label,fmt,mn,mxv,step,value))
+                "perm":perm,"state":"Ok","timeout":"60","timestamp":ts,
+            }, body=_num(element,label,fmt,mn,mxv,step,value))
 
         def _defS(name, label, group, switches, rule="OneOfMany"):
+            if not wanted(name):
+                return
             self._out("defSwitchVector", {
                 "device":DEVICE,"name":name,"label":label,"group":group,
-                "perm":"rw","rule":rule,"state":"Idle","timeout":"60","timestamp":ts,
+                "perm":"rw","rule":rule,"state":"Ok","timeout":"60","timestamp":ts,
             }, body="\n".join(_swn(n,l,v) for n,l,v in switches))
 
-        # First pass: define all properties
-        _defN("FOCUS_SPEED","Speed (steps/sec)","Main","%4.0f",1,2000,10,self.speed)
-        _defN("ACCELERATION","Accel (steps/sec²)","Main","%5.0f",10,10000,10,self.acc)
-        _defN("FOCUS_MAX","Max Position","Main","%7.0f",100,9999999,1000,mx)
-        _defN("FOCUS_POSITION","Position","Main","%7.0f",0,mx,1,self.pos,perm="ro")
-        _defN("FOCUS_ABSOLUTE_POSITION","Goto","Main","%7.0f",0,mx,1,0)
-        _defN("FOCUS_RELATIVE_POSITION","Relative Move","Main","%7.0f",-mx,mx,1,0)
-        _defS("FOCUS_MOTION","Direction","Main",[
+        _defN("FOCUS_SPEED","FOCUS_SPEED_VALUE","Speed","Main Control","%4.0f",1,2000,10,self.speed)
+        _defN("ACCELERATION","ACCELERATION_VALUE","Acceleration","Main Control","%5.0f",10,10000,10,self.acc)
+        _defN("FOCUS_MAX","FOCUS_MAX_VALUE","Max. Position","Main Control","%7.0f",100,9999999,1000,mx)
+        _defN("ABS_FOCUS_POSITION","FOCUS_ABSOLUTE_POSITION","Absolute Position","Main Control","%7.0f",0,mx,1,self.pos)
+        _defN("REL_FOCUS_POSITION","FOCUS_RELATIVE_POSITION","Relative Position","Main Control","%7.0f",0,mx,1,0)
+        _defS("FOCUS_MOTION","Direction","Main Control",[
             ("FOCUS_INWARD","Inward","Off"),("FOCUS_OUTWARD","Outward","On")])
-        _defN("FOCUS_TIMER","Timer (ms)","Main","%5.0f",10,60000,10,100)
-        _defS("REVERSE_MOTION","Reverse","Options",[
-            ("REVERSE_ENABLED","Enabled","On" if self.rev else "Off"),
-            ("REVERSE_DISABLED","Disabled","Off" if self.rev else "On")])
+        _defN("FOCUS_TIMER","FOCUS_TIMER_VALUE","Timer","Main Control","%5.0f",10,60000,10,100)
+        _defS("FOCUS_REVERSE_MOTION","Reverse Motion","Options",[
+            ("INDI_ENABLED","Enabled","On" if self.rev else "Off"),
+            ("INDI_DISABLED","Disabled","Off" if self.rev else "On")])
         _defS("HOLD_MODE","Hold Mode","Options",[
             ("HOLD_ON","On","On" if self.hold else "Off"),
             ("HOLD_OFF","Off","Off" if self.hold else "On")])
-        _defN("FOCUS_TEMPERATURE","Temperature (°C)","Main","%4.1f",-55,125,0.1,self.temp,perm="ro")
-        _defS("ABORT_MOTION","Abort","Main",[("ABORT","Abort","Off")])
-
-        # Flush to ensure indiserver processes definitions
-        sys.stdout.flush()
-        time.sleep(0.5)
-
-        # Second pass: set values (pushes to existing clients)
-        self._setN("FOCUS_SPEED", self.speed)
-        self._setN("ACCELERATION", self.acc)
-        self._setN("FOCUS_MAX", mx)
-        self._setN("FOCUS_POSITION", self.pos)
-        self._setN("FOCUS_ABSOLUTE_POSITION", 0)
-        self._setN("FOCUS_RELATIVE_POSITION", 0)
-        self._setS("FOCUS_MOTION", [("FOCUS_INWARD","Off"),("FOCUS_OUTWARD","On")])
-        self._setN("FOCUS_TIMER", 100)
-        self._setS("REVERSE_MOTION", [
-            ("REVERSE_ENABLED","On" if self.rev else "Off"),
-            ("REVERSE_DISABLED","Off" if self.rev else "On")])
-        self._setS("HOLD_MODE", [
-            ("HOLD_ON","On" if self.hold else "Off"),
-            ("HOLD_OFF","Off" if self.hold else "On")])
-        self._setN("FOCUS_TEMPERATURE", self.temp)
-        self._setS("ABORT_MOTION", [("ABORT","Off")])
+        _defN("FOCUS_TEMPERATURE","TEMPERATURE","Temperature","Main Control","%4.1f",-55,125,0.1,self.temp,perm="ro")
+        _defS("FOCUS_ABORT_MOTION","Abort Motion","Main Control",[("ABORT","Abort","Off")], rule="AtMostOne")
 
     def remove_focus(self):
-        for n in ["FOCUS_SPEED","ACCELERATION","FOCUS_MAX","FOCUS_POSITION",
-                  "FOCUS_ABSOLUTE_POSITION","FOCUS_RELATIVE_POSITION",
-                  "FOCUS_MOTION","FOCUS_TIMER","REVERSE_MOTION",
-                  "HOLD_MODE","FOCUS_TEMPERATURE","ABORT_MOTION"]:
+        for n in ["FOCUS_SPEED","ACCELERATION","FOCUS_MAX",
+                  "ABS_FOCUS_POSITION","REL_FOCUS_POSITION",
+                  "FOCUS_MOTION","FOCUS_TIMER","FOCUS_REVERSE_MOTION",
+                  "HOLD_MODE","FOCUS_TEMPERATURE","FOCUS_ABORT_MOTION"]:
             self._delete(n)
 
     # ── Set / Update ──────────────────────────────────────────────────
@@ -273,9 +283,10 @@ class EFocuserINDI:
 
     def _setN(self, name, value, state="Ok"):
         ts = now_ts()
+        element = NUMBER_ELEMENTS.get(name, "VALUE")
         self._out("setNumberVector", {
             "device":DEVICE,"name":name,"state":state,"timestamp":ts,
-        }, body=f'  <oneNumber name="VALUE">{value}</oneNumber>')
+        }, body=f'  <oneNumber name="{element}">{value}</oneNumber>')
 
     # ── Connection ────────────────────────────────────────────────────
 
@@ -302,6 +313,7 @@ class EFocuserINDI:
 
     def do_disconnect(self):
         self.conn = False
+        self.active_motion = None
         self.ser.disconnect()
         self.remove_focus()
         self._setS("CONNECTION", [("CONNECT","Off"),("DISCONNECT","On")])
@@ -309,15 +321,27 @@ class EFocuserINDI:
 
     # ── Polling ───────────────────────────────────────────────────────
 
+    def _publish_motion_status(self, position, moving):
+        self.pos = position
+        self.moving = moving
+        state = "Busy" if moving else "Ok"
+        self._setN("ABS_FOCUS_POSITION", position, state)
+        if self.active_motion and self.active_motion != "ABS_FOCUS_POSITION":
+            self._setN(self.active_motion, self.active_motion_value, state)
+        if not moving:
+            self.active_motion = None
+
     def _poll(self):
         c = 0
         while self.runflag:
             time.sleep(POLL_S)
             if not self.conn: continue
             try:
-                p, m = self.ser.status()
-                self.pos = p; self.moving = m
-                self._setN("FOCUS_POSITION", p)
+                status = self.ser.status()
+                if status is None:
+                    continue
+                p, m = status
+                self._publish_motion_status(p, m)
                 c += 1
                 if c >= 4:
                     c = 0
@@ -351,26 +375,30 @@ class EFocuserINDI:
         nm = root.get("name","")
 
         if tag == "getProperties":
-            # Don't respond — let indiserver use its cached properties
+            # indiserver routes definitions to interested clients but does not
+            # cache and replay them for clients that connect later.
+            self.define_all(nm)
+            if self.conn:
+                self.define_focus(nm)
             return
 
         if tag == "newSwitchVector":
             if nm == "CONNECTION":
                 if self._on_sw(root, "CONNECT"): self.do_connect()
                 elif self._on_sw(root, "DISCONNECT"): self.do_disconnect()
-            elif nm == "ABORT_MOTION":
+            elif nm == "FOCUS_ABORT_MOTION":
                 if self._on_sw(root, "ABORT"):
                     if self.conn: self.ser.stop()
-                    self._setS("ABORT_MOTION", [("ABORT","Off")])
-            elif nm == "REVERSE_MOTION":
-                if self._on_sw(root, "REVERSE_ENABLED"):
+                    self._setS("FOCUS_ABORT_MOTION", [("ABORT","Off")])
+            elif nm == "FOCUS_REVERSE_MOTION":
+                if self._on_sw(root, "INDI_ENABLED"):
                     self.rev = True
                     if self.conn: self.ser.set_rev(True)
-                    self._setS("REVERSE_MOTION", [("REVERSE_ENABLED","On"),("REVERSE_DISABLED","Off")])
-                elif self._on_sw(root, "REVERSE_DISABLED"):
+                    self._setS("FOCUS_REVERSE_MOTION", [("INDI_ENABLED","On"),("INDI_DISABLED","Off")])
+                elif self._on_sw(root, "INDI_DISABLED"):
                     self.rev = False
                     if self.conn: self.ser.set_rev(False)
-                    self._setS("REVERSE_MOTION", [("REVERSE_ENABLED","Off"),("REVERSE_DISABLED","On")])
+                    self._setS("FOCUS_REVERSE_MOTION", [("INDI_ENABLED","Off"),("INDI_DISABLED","On")])
             elif nm == "HOLD_MODE":
                 if self._on_sw(root, "HOLD_ON"):
                     self.hold = True
@@ -402,32 +430,54 @@ class EFocuserINDI:
                 self.maxst = val
                 if self.conn: self.ser.set_max(val)
                 self._setN("FOCUS_MAX", self.maxst)
-            elif nm == "FOCUS_ABSOLUTE_POSITION":
+            elif nm == "ABS_FOCUS_POSITION":
                 t = max(0, min(int(v), self.maxst))
                 if self.conn:
-                    self.ser.move(t)
-                    self._msg(f"Goto {t}")
-                self._setN("FOCUS_ABSOLUTE_POSITION", t)
-            elif nm == "FOCUS_RELATIVE_POSITION":
-                d = int(v)
+                    if self.ser.move(t):
+                        self.active_motion = "ABS_FOCUS_POSITION"
+                        self.active_motion_value = t
+                        self._msg(f"Goto {t}")
+                        self._setN("ABS_FOCUS_POSITION", t, "Busy")
+                    else:
+                        self._setN("ABS_FOCUS_POSITION", self.pos, "Alert")
+                else:
+                    self._setN("ABS_FOCUS_POSITION", self.pos, "Idle")
+            elif nm == "REL_FOCUS_POSITION":
+                d = abs(int(v))
                 if self.conn:
+                    if self.inward:
+                        d = -d
                     nt = max(0, min(self.pos + d, self.maxst))
-                    self.ser.move(nt)
-                    self._msg(f"Relative {d}")
-                self._setN("FOCUS_RELATIVE_POSITION", 0)
+                    if self.ser.move(nt):
+                        self.active_motion = "REL_FOCUS_POSITION"
+                        self.active_motion_value = abs(d)
+                        self._msg(f"Relative {d}")
+                        self._setN("REL_FOCUS_POSITION", abs(d), "Busy")
+                    else:
+                        self._setN("REL_FOCUS_POSITION", abs(d), "Alert")
+                else:
+                    self._setN("REL_FOCUS_POSITION", abs(d), "Idle")
             elif nm == "FOCUS_TIMER":
                 dur = int(v)
                 if self.conn and dur > 0:
                     delta = int(dur * self.speed / 1000.0)
                     if self.inward: delta = -delta
                     nt = max(0, min(self.pos + delta, self.maxst))
-                    self.ser.move(nt)
-                    self._msg(f"Timer {dur}ms, ~{abs(delta)} steps")
-                self._setN("FOCUS_TIMER", dur)
+                    if self.ser.move(nt):
+                        self.active_motion = "FOCUS_TIMER"
+                        self.active_motion_value = dur
+                        self._msg(f"Timer {dur}ms, ~{abs(delta)} steps")
+                        self._setN("FOCUS_TIMER", dur, "Busy")
+                    else:
+                        self._setN("FOCUS_TIMER", dur, "Alert")
+                else:
+                    self._setN("FOCUS_TIMER", dur, "Idle")
 
         elif tag == "newTextVector":
             if nm == "DEVICE_PORT":
-                e = root.find("oneText")
+                e = root.find("oneText[@name='PORT']")
+                if e is None:
+                    e = root.find("oneText")
                 if e is not None and e.text:
                     self.port = e.text.strip()
                     self.log.info("Port: %s", self.port)
