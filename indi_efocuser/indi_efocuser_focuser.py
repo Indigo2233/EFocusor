@@ -493,6 +493,8 @@ class EFocuserINDI:
     def run(self):
         self.log.info("EFucoser INDI Focuser v%s starting", VERSION)
         self.define_all()
+        sys.stdout.flush()
+        time.sleep(0.1)
         self._msg("Driver ready.")
 
         buf = ""
