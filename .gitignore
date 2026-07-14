@@ -9,3 +9,4 @@
 .vs/
 *.user
 *.suo
+__pycache__/
