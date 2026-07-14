@@ -526,7 +526,14 @@ class EFocuserINDI:
         return m.group(1) if m else ""
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", stream=sys.stderr)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stderr),
+            logging.FileHandler("/tmp/efocuser_indi.log", mode="a"),
+        ],
+    )
     EFocuserINDI().run()
 
 if __name__ == "__main__":
