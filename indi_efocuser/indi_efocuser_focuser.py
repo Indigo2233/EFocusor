@@ -225,6 +225,9 @@ class EFocuserINDI:
                 _swn("DISCONNECT", "Disconnect", "Off" if self.conn else "On")
             ))
 
+        # Define focuser properties at startup so indiserver caches them
+        self.define_focus(requested=requested)
+
     def define_focus(self, requested=""):
         ts = now_ts()
         mx = self.maxst
@@ -378,8 +381,6 @@ class EFocuserINDI:
             # indiserver routes definitions to interested clients but does not
             # cache and replay them for clients that connect later.
             self.define_all(nm)
-            if self.conn:
-                self.define_focus(nm)
             return
 
         if tag == "newSwitchVector":
