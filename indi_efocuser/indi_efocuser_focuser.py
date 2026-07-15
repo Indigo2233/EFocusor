@@ -193,7 +193,7 @@ class EFocuserINDI:
             return not requested or requested == name
 
         # DRIVER_INFO — required for indiserver to recognize device interface
-        # FOCUSER_INTERFACE = 1 << 1 = 2
+        # FOCUSER_INTERFACE = 1 << 3 = 8  (NOT 2, that's CCD!)
         if wanted("DRIVER_INFO"):
             self._out("defTextVector", {
                 "device": DEVICE, "name": "DRIVER_INFO", "label": "Driver Info",
@@ -203,7 +203,7 @@ class EFocuserINDI:
                 _def_text("DRIVER_NAME", "Name", DEVICE) + "\n" +
                 _def_text("DRIVER_EXEC", "Exec", "indi_efocuser_focuser") + "\n" +
                 _def_text("DRIVER_VERSION", "Version", VERSION) + "\n" +
-                _def_text("DRIVER_INTERFACE", "Interface", "2")
+                _def_text("DRIVER_INTERFACE", "Interface", "8")
             ))
 
         # Port text — prefer /dev/ttyUSB* if present, fall back to user-set port
