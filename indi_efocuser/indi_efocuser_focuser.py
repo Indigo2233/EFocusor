@@ -260,6 +260,7 @@ class EFocuserINDI:
         _defN("ACCELERATION","ACCELERATION_VALUE","Acceleration","Main Control","%5.0f",10,10000,10,self.acc)
         _defN("FOCUS_MAX","FOCUS_MAX_VALUE","Max. Position","Main Control","%7.0f",100,9999999,1000,mx)
         _defN("ABS_FOCUS_POSITION","FOCUS_ABSOLUTE_POSITION","Absolute Position","Main Control","%7.0f",0,mx,1,self.pos)
+        _defN("FOCUS_POSITION","FOCUS_POSITION","Position","Main Control","%7.0f",0,mx,1,self.pos,perm="ro")
         _defN("REL_FOCUS_POSITION","FOCUS_RELATIVE_POSITION","Relative Position","Main Control","%7.0f",0,mx,1,0)
         _defS("FOCUS_MOTION","Direction","Main Control",[
             ("FOCUS_INWARD","Inward","Off"),("FOCUS_OUTWARD","Outward","On")])
@@ -275,7 +276,7 @@ class EFocuserINDI:
 
     def remove_focus(self):
         for n in ["FOCUS_SPEED","ACCELERATION","FOCUS_MAX",
-                  "ABS_FOCUS_POSITION","REL_FOCUS_POSITION",
+                  "ABS_FOCUS_POSITION","FOCUS_POSITION","REL_FOCUS_POSITION",
                   "FOCUS_MOTION","FOCUS_TIMER","FOCUS_REVERSE_MOTION",
                   "HOLD_MODE","FOCUS_TEMPERATURE","FOCUS_ABORT_MOTION"]:
             self._delete(n)
@@ -335,6 +336,7 @@ class EFocuserINDI:
         self.moving = moving
         state = "Busy" if moving else "Ok"
         self._setN("ABS_FOCUS_POSITION", position, state)
+        self._setN("FOCUS_POSITION", position, state)
         if self.active_motion and self.active_motion != "ABS_FOCUS_POSITION":
             self._setN(self.active_motion, self.active_motion_value, state)
         if not moving:
