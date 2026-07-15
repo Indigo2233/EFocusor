@@ -21,7 +21,6 @@ namespace ASCOM.EFucoser
         private bool lastMoving = false;
         private bool lastLink = false;
         private double lastTemp = 20.0;
-        private bool supportsHome;
         private bool? temperatureSensorPresent;
 
         private long UPDATETICKS = (long)(1 * 10000000.0);
@@ -30,7 +29,8 @@ namespace ASCOM.EFucoser
 
         // ASCOM identity
         internal static string driverID = "ASCOM.EFucoser.Focuser";
-        private static string driverDescription = "ASCOM Focuser Driver for EFucoser ESP8266.";
+        private static string driverDisplayName = "EFucoser Universal Focuser";
+        private static string driverDescription = "ASCOM Focuser Driver for EFucoser Arduino Nano and ESP8266 controllers.";
         private const string Esp8266FocuserIdentity = "EFucoser ESP8266 Focuser";
         private const string Esp8266Uln2003FocuserIdentity = "EFucoser ESP8266 ULN2003 Focuser";
         private const string ArduinoNanoUln2003FocuserIdentity = "EFucoser Arduino Nano ULN2003 Focuser";
@@ -101,22 +101,13 @@ namespace ASCOM.EFucoser
         {
             get
             {
-                var sa = new ArrayList();
-                if (supportsHome)
-                    sa.Add("Home");
-                return sa;
+                return new ArrayList();
             }
         }
 
         public string Action(string actionName, string actionParameters)
         {
-            CheckConnected("Action");
-            if (string.Equals(actionName, "Home", StringComparison.OrdinalIgnoreCase) && supportsHome)
-            {
-                ExecuteFirmwareCommand("H#");
-                return "";
-            }
-            throw new ASCOM.ActionNotImplementedException("Action " + actionName + " is not implemented by this driver");
+            throw new ASCOM.ActionNotImplementedException(actionName);
         }
 
         public void CommandBlind(string command, bool raw)
@@ -212,7 +203,7 @@ namespace ASCOM.EFucoser
                         p.DeviceType = "Focuser";
                         if (!p.IsRegistered(driverID))
                         {
-                            p.Register(driverID, driverDescription);
+                            p.Register(driverID, driverDisplayName);
                         }
 
                         transport = GetProfileValue(p, transportProfileName, transportDefault);
@@ -237,8 +228,7 @@ namespace ASCOM.EFucoser
                             lastUpdate = 0;
                             lastL = 0;
 
-                            string identity = ValidateDeviceIdentity();
-                            supportsHome = !FocuserProtocol.IsArduinoNanoIdentity(identity);
+                            ValidateDeviceIdentity();
 
                             FocuserDeviceInfo deviceInfo = FocuserProtocol.ParseDeviceInfo(ExecuteFirmwareCommand("I#"));
                             temperatureSensorPresent = deviceInfo.TemperatureSensorPresent;
@@ -264,7 +254,6 @@ namespace ASCOM.EFucoser
                         {
                             connectedState = false;
                             lastLink = false;
-                            supportsHome = false;
                             temperatureSensorPresent = null;
                             if (connection != null)
                             {
@@ -290,7 +279,6 @@ namespace ASCOM.EFucoser
                     lastLink = false;
                     lastUpdate = 0;
                     lastL = 0;
-                    supportsHome = false;
                     temperatureSensorPresent = null;
                     if (connection != null)
                     {
@@ -316,7 +304,7 @@ namespace ASCOM.EFucoser
             get
             {
                 Version version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                string driverInfo = "EFucoser ESP8266 Focuser Driver. Version: " + String.Format(CultureInfo.InvariantCulture, "{0}.{1}", version.Major, version.Minor);
+                string driverInfo = "EFucoser Universal Focuser Driver for Arduino Nano serial and ESP8266 TCP. Version: " + String.Format(CultureInfo.InvariantCulture, "{0}.{1}", version.Major, version.Minor);
                 tl.LogMessage("DriverInfo Get", driverInfo);
                 return driverInfo;
             }
@@ -346,7 +334,7 @@ namespace ASCOM.EFucoser
         {
             get
             {
-                string name = "EFucoser ESP8266 Focuser";
+                string name = "EFucoser Universal Focuser";
                 tl.LogMessage("Name Get", name);
                 return name;
             }
@@ -542,13 +530,13 @@ namespace ASCOM.EFucoser
             return new SerialFocuserConnection(comPort, commandTimeoutMs);
         }
 
-        private string ValidateDeviceIdentity()
+        private void ValidateDeviceIdentity()
         {
             string identity = CommandString("#", false).Replace('#', ' ').Trim();
             tl.LogMessage("Device Identity", identity);
 
             if (IsExpectedFocuserIdentity(identity))
-                return identity;
+                return;
 
             throw new ASCOM.NotConnectedException(
                 "Connected device is not an EFucoser focuser. Response: " + identity);
@@ -631,7 +619,7 @@ namespace ASCOM.EFucoser
             {
                 P.DeviceType = "Focuser";
                 if (bRegister)
-                    P.Register(driverID, driverDescription);
+                    P.Register(driverID, driverDisplayName);
                 else
                     P.Unregister(driverID);
             }

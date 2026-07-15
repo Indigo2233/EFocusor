@@ -151,7 +151,7 @@ namespace ASCOM.EFucoser
             this.label8.Name = "label8";
             this.label8.Size = new System.Drawing.Size(179, 17);
             this.label8.TabIndex = 10;
-            this.label8.Text = "EFucoser ESP8266 Focuser";
+            this.label8.Text = "EFucoser Universal Focuser";
 
             // label9
             this.label9.AutoSize = true;

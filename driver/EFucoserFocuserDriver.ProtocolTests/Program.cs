@@ -23,8 +23,6 @@ namespace ASCOM.EFucoser
 
                 Assert(FocuserProtocol.IsErrorResponse("ERR:home_unavailable#"), "firmware error is recognized");
                 Assert(!FocuserProtocol.IsErrorResponse("OK#"), "successful response is accepted");
-                Assert(FocuserProtocol.IsArduinoNanoIdentity("EFucoser Arduino Nano ULN2003 Focuser ver 1201"), "Nano identity is recognized");
-
                 Console.WriteLine("All protocol tests passed.");
                 return 0;
             }

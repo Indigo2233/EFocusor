@@ -1,6 +1,6 @@
 # EFucoser Development Guide for Agents
 
-This repository contains firmware, ASCOM driver code, and test utilities for the EFucoser ESP8266 electronic focuser.
+This repository contains firmware, ASCOM driver code, and test utilities for the EFucoser Arduino Nano and ESP8266 electronic focuser.
 
 ## Project Map
 
@@ -16,8 +16,8 @@ This repository contains firmware, ASCOM driver code, and test utilities for the
 Keep these stable unless a new ASCOM driver slot is intentionally required:
 
 - ASCOM ProgID: `ASCOM.EFucoser.Focuser`
-- ASCOM Chooser name: `EFucoser ESP8266 Focuser`
-- ASCOM driver description: `ASCOM Focuser Driver for EFucoser ESP8266.`
+- ASCOM Chooser name: `EFucoser Universal Focuser`
+- ASCOM driver description: `ASCOM Focuser Driver for EFucoser Arduino Nano and ESP8266 controllers.`
 - Driver DLL assembly name: `ASCOM.EFucoser.Focuser.dll`
 - ESP8266 AP SSID pattern: `Focuser-<chipid>`
 - ESP8266 AP password: `012345678`

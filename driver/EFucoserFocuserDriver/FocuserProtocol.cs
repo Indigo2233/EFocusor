@@ -44,12 +44,6 @@ namespace ASCOM.EFucoser
                 && response.TrimStart().StartsWith("ERR:", StringComparison.OrdinalIgnoreCase);
         }
 
-        internal static bool IsArduinoNanoIdentity(string identity)
-        {
-            return !string.IsNullOrWhiteSpace(identity)
-                && identity.StartsWith("EFucoser Arduino Nano ULN2003 Focuser", StringComparison.Ordinal);
-        }
-
         private static int? ParseNullableInt(string response, string propertyName)
         {
             Match match = MatchJsonValue(response, propertyName, @"-?\d+");
