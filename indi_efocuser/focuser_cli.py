@@ -34,8 +34,11 @@ def get_position():
     resp = send(
         f'<getProperties version="1.7" device="{DEVICE}" name="ABS_FOCUS_POSITION"/>'
     )
-    m = re.search(r"<oneNumber[^>]*>(\d+)</oneNumber>", resp)
-    return int(m.group(1)) if m else None
+    m = re.search(
+        r"<(?P<kind>def|one)Number[^>]*>(?P<value>\d+)</(?P=kind)Number>",
+        resp,
+    )
+    return int(m.group("value")) if m else None
 
 
 def move_absolute(target: int):
@@ -80,8 +83,9 @@ def get_status():
         "FOCUS_TEMPERATURE",
     ]:
         m = re.search(
-            rf'<defNumberVector[^>]*name="{name}".*?<oneNumber[^>]*>([\d.]+)',
+            rf'<defNumberVector[^>]*name="{name}".*?<defNumber[^>]*>([\d.]+)',
             resp,
+            re.DOTALL,
         )
         if m:
             props[name] = m.group(1)

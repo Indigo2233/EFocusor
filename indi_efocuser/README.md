@@ -84,6 +84,9 @@ Ekos and other clients. It also answers every matching `getProperties` request,
 so clients that connect after the driver starts receive the complete property
 definitions.
 
+Driver 1.1.1 uses the INDI definition widget tags required by KStars
+(`defNumber`, `defSwitch`, and `defText`).
+
 ## Firmware Protocol
 
 The serial protocol uses `#`-terminated text commands:

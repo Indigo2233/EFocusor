@@ -2,7 +2,8 @@
 
 ## Resolution
 
-Resolved in driver version 1.1.0.
+Property forwarding was resolved in driver version 1.1.0. KStars property
+parsing was resolved in version 1.1.1.
 
 - The driver now responds to `getProperties`, including device-wide and
   property-specific requests. `indiserver` routes definitions according to
@@ -14,6 +15,9 @@ Resolved in driver version 1.1.0.
   `Ok` after movement completes.
 - Protocol regression tests cover property discovery and standard absolute and
   relative movement commands.
+- Property definition vectors now contain the INDI definition widgets
+  `defNumber`, `defSwitch`, and `defText`. Update and command vectors continue
+  to use `oneNumber`, `oneSwitch`, and `oneText`.
 
 ## Project
 - **Name**: EFucoser INDI Focuser Driver

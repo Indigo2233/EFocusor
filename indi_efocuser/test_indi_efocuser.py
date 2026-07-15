@@ -2,7 +2,9 @@ import io
 import unittest
 import xml.etree.ElementTree as ET
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
+import focuser_cli
 from indi_efocuser_focuser import DEVICE, EFocuserINDI, SerialIO
 
 
@@ -32,7 +34,7 @@ class DriverProtocolTests(unittest.TestCase):
 
         self.assertIn('name="DRIVER_INFO"', output)
         self.assertIn('name="DEVICE_PORT"', output)
-        self.assertIn('<oneText name="PORT"', output)
+        self.assertIn('<defText name="PORT"', output)
         self.assertIn('name="CONNECTION"', output)
 
     def test_connected_get_properties_defines_standard_focuser_properties(self):
@@ -55,11 +57,28 @@ class DriverProtocolTests(unittest.TestCase):
         for name in expected:
             self.assertIn(f'name="{name}"', output)
 
-        self.assertIn('<oneNumber name="FOCUS_SPEED_VALUE"', output)
-        self.assertIn('<oneNumber name="FOCUS_ABSOLUTE_POSITION"', output)
-        self.assertIn('<oneNumber name="FOCUS_RELATIVE_POSITION"', output)
-        self.assertIn('<oneNumber name="FOCUS_MAX_VALUE"', output)
-        self.assertIn('<oneNumber name="TEMPERATURE"', output)
+        self.assertIn('<defNumber name="FOCUS_SPEED_VALUE"', output)
+        self.assertIn('<defNumber name="FOCUS_ABSOLUTE_POSITION"', output)
+        self.assertIn('<defNumber name="FOCUS_RELATIVE_POSITION"', output)
+        self.assertIn('<defNumber name="FOCUS_MAX_VALUE"', output)
+        self.assertIn('<defNumber name="TEMPERATURE"', output)
+
+    def test_definition_vectors_use_definition_widgets(self):
+        self.driver.conn = True
+        output = self.output_for(
+            f'<getProperties version="1.7" device="{DEVICE}"/>'
+        )
+        root = ET.fromstring(f"<output>{output}</output>")
+        widget_tags = {
+            "defNumberVector": "defNumber",
+            "defSwitchVector": "defSwitch",
+            "defTextVector": "defText",
+        }
+
+        for vector in root:
+            expected_widget = widget_tags.get(vector.tag)
+            if expected_widget:
+                self.assertGreater(len(vector.findall(expected_widget)), 0)
 
     def test_named_get_properties_only_returns_requested_property(self):
         self.driver.conn = True
@@ -78,13 +97,15 @@ class DriverProtocolTests(unittest.TestCase):
         self.driver.ser = serial
         self.driver.conn = True
 
-        self.output_for(
+        output = self.output_for(
             f'<newNumberVector device="{DEVICE}" name="ABS_FOCUS_POSITION">'
             '<oneNumber name="FOCUS_ABSOLUTE_POSITION">1234</oneNumber>'
             '</newNumberVector>'
         )
 
         self.assertEqual([1234], serial.moves)
+        self.assertIn('<setNumberVector', output)
+        self.assertIn('<oneNumber name="FOCUS_ABSOLUTE_POSITION">', output)
 
     def test_standard_relative_position_uses_motion_direction(self):
         serial = FakeSerial()
@@ -120,6 +141,20 @@ class DriverProtocolTests(unittest.TestCase):
         serial.cmd = lambda command: None
 
         self.assertIsNone(serial.status())
+
+    def test_cli_reads_position_from_a_standard_definition(self):
+        response = (
+            f'<defNumberVector device="{DEVICE}" name="ABS_FOCUS_POSITION">'
+            '<defNumber name="FOCUS_ABSOLUTE_POSITION" label="Steps" '
+            'format="%.f" min="0" max="816000" step="1">1234</defNumber>'
+            '</defNumberVector>'
+        )
+
+        with patch.object(focuser_cli, "send", return_value=response):
+            self.assertEqual(1234, focuser_cli.get_position())
+            self.assertEqual(
+                "1234", focuser_cli.get_status()["ABS_FOCUS_POSITION"]
+            )
 
 
 if __name__ == "__main__":

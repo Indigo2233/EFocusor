@@ -8,14 +8,14 @@ Communicates via INDI XML protocol over stdin/stdout.
 Usage:  indiserver -v indi_efocuser_focuser
 """
 
-import sys, os, time, json, threading, logging
+import sys, os, time, json, threading, logging, tempfile
 import xml.etree.ElementTree as ET
 import serial, serial.tools.list_ports
 
 # ── Constants ────────────────────────────────────────────────────────────
 
 DEVICE = "EFucoser Focuser"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 BAUD = 9600
 TIMEOUT = 2.0
 DEF_MAX = 816000
@@ -41,15 +41,15 @@ def esc(s):
 def now_ts():
     return time.strftime("%Y-%m-%dT%H:%M:%S")
 
-def _swn(name, label, value="Off"):
-    return f'  <oneSwitch name="{esc(name)}" label="{esc(label)}">{value}</oneSwitch>'
+def _def_switch(name, label, value="Off"):
+    return f'  <defSwitch name="{esc(name)}" label="{esc(label)}">{value}</defSwitch>'
 
-def _num(name, label, fmt, mn, mx, step, value):
-    return (f'  <oneNumber name="{esc(name)}" label="{esc(label)}" '
-            f'format="{esc(fmt)}" min="{mn}" max="{mx}" step="{step}">{value}</oneNumber>')
+def _def_number(name, label, fmt, mn, mx, step, value):
+    return (f'  <defNumber name="{esc(name)}" label="{esc(label)}" '
+            f'format="{esc(fmt)}" min="{mn}" max="{mx}" step="{step}">{value}</defNumber>')
 
-def _txt(name, label, value):
-    return f'  <oneText name="{esc(name)}" label="{esc(label)}">{esc(value)}</oneText>'
+def _def_text(name, label, value):
+    return f'  <defText name="{esc(name)}" label="{esc(label)}">{esc(value)}</defText>'
 
 # ── Serial ───────────────────────────────────────────────────────────────
 
@@ -200,10 +200,10 @@ class EFocuserINDI:
                 "group": "Connection", "perm": "ro", "state": "Idle",
                 "timeout": "60", "timestamp": ts,
             }, body=(
-                _txt("DRIVER_NAME", "Name", DEVICE) + "\n" +
-                _txt("DRIVER_EXEC", "Exec", "indi_efocuser_focuser") + "\n" +
-                _txt("DRIVER_VERSION", "Version", VERSION) + "\n" +
-                _txt("DRIVER_INTERFACE", "Interface", "2")
+                _def_text("DRIVER_NAME", "Name", DEVICE) + "\n" +
+                _def_text("DRIVER_EXEC", "Exec", "indi_efocuser_focuser") + "\n" +
+                _def_text("DRIVER_VERSION", "Version", VERSION) + "\n" +
+                _def_text("DRIVER_INTERFACE", "Interface", "2")
             ))
 
         # Port text
@@ -216,7 +216,7 @@ class EFocuserINDI:
                 "device": DEVICE, "name": "DEVICE_PORT", "label": "Serial Port",
                 "group": "Connection", "perm": "rw", "state": "Idle",
                 "timeout": "60", "timestamp": ts,
-            }, body=_txt("PORT", "Port", self.port))
+            }, body=_def_text("PORT", "Port", self.port))
 
         # Connection switch
         if wanted("CONNECTION"):
@@ -225,8 +225,8 @@ class EFocuserINDI:
                 "group": "Main Control", "perm": "rw", "rule": "OneOfMany",
                 "state": "Ok" if self.conn else "Idle", "timeout": "60", "timestamp": ts,
             }, body=(
-                _swn("CONNECT", "Connect", "On" if self.conn else "Off") + "\n" +
-                _swn("DISCONNECT", "Disconnect", "Off" if self.conn else "On")
+                _def_switch("CONNECT", "Connect", "On" if self.conn else "Off") + "\n" +
+                _def_switch("DISCONNECT", "Disconnect", "Off" if self.conn else "On")
             ))
 
         # Define focuser properties at startup so indiserver caches them
@@ -245,7 +245,7 @@ class EFocuserINDI:
             self._out("defNumberVector", {
                 "device":DEVICE,"name":name,"label":label,"group":group,
                 "perm":perm,"state":"Ok","timeout":"60","timestamp":ts,
-            }, body=_num(element,label,fmt,mn,mxv,step,value))
+            }, body=_def_number(element,label,fmt,mn,mxv,step,value))
 
         def _defS(name, label, group, switches, rule="OneOfMany"):
             if not wanted(name):
@@ -253,7 +253,7 @@ class EFocuserINDI:
             self._out("defSwitchVector", {
                 "device":DEVICE,"name":name,"label":label,"group":group,
                 "perm":"rw","rule":rule,"state":"Ok","timeout":"60","timestamp":ts,
-            }, body="\n".join(_swn(n,l,v) for n,l,v in switches))
+            }, body="\n".join(_def_switch(n,l,v) for n,l,v in switches))
 
         _defN("FOCUS_SPEED","FOCUS_SPEED_VALUE","Speed","Main Control","%4.0f",1,2000,10,self.speed)
         _defN("ACCELERATION","ACCELERATION_VALUE","Acceleration","Main Control","%5.0f",10,10000,10,self.acc)
@@ -533,7 +533,10 @@ def main():
         format="%(asctime)s [%(name)s] %(message)s",
         handlers=[
             logging.StreamHandler(sys.stderr),
-            logging.FileHandler("/tmp/efocuser_indi.log", mode="a"),
+            logging.FileHandler(
+                os.path.join(tempfile.gettempdir(), "efocuser_indi.log"),
+                mode="a",
+            ),
         ],
     )
     EFocuserINDI().run()

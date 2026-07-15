@@ -40,7 +40,7 @@ def pos():
     # Fallback: defNumberVector
     m = re.search(
         r'<defNumberVector[^>]*name="ABS_FOCUS_POSITION".*?'
-        r'<oneNumber[^>]*>([\d-]+)',
+        r'<defNumber[^>]*>([\d-]+)',
         r, re.DOTALL
     )
     return int(m.group(1)) if m else 0

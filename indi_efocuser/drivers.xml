@@ -3,7 +3,7 @@
 <devGroup group="Focusers">
     <device label="EFucoser Focuser" manufacturer="EFucoser">
         <driver name="EFucoser Focuser">indi_efocuser_focuser</driver>
-        <version>1.1</version>
+        <version>1.1.1</version>
     </device>
 </devGroup>
 </driversList>
