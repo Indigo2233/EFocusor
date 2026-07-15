@@ -18,11 +18,13 @@ namespace ASCOM.EFucoser
     internal sealed class SerialFocuserConnection : IFocuserConnection
     {
         private readonly string portName;
+        private readonly int timeoutMs;
         private ASCOM.Utilities.Serial serialPort;
 
-        public SerialFocuserConnection(string portName)
+        public SerialFocuserConnection(string portName, int timeoutMs)
         {
             this.portName = portName;
+            this.timeoutMs = timeoutMs;
         }
 
         public bool IsConnected
@@ -44,9 +46,10 @@ namespace ASCOM.EFucoser
             serialPort.Parity = SerialParity.None;
             serialPort.DataBits = 8;
             serialPort.DTREnable = false;
+            serialPort.ReceiveTimeoutMs = timeoutMs;
             serialPort.Connected = true;
+            System.Threading.Thread.Sleep(2200);
             serialPort.ClearBuffers();
-            System.Threading.Thread.Sleep(1000);
         }
 
         public void Disconnect()
@@ -98,7 +101,24 @@ namespace ASCOM.EFucoser
 
         public bool IsConnected
         {
-            get { return client != null && client.Connected; }
+            get
+            {
+                if (client == null || !client.Connected || client.Client == null)
+                    return false;
+
+                try
+                {
+                    return !(client.Client.Poll(0, SelectMode.SelectRead) && client.Client.Available == 0);
+                }
+                catch (SocketException)
+                {
+                    return false;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return false;
+                }
+            }
         }
 
         public string EndpointDescription
@@ -112,7 +132,17 @@ namespace ASCOM.EFucoser
             client.NoDelay = true;
             client.SendTimeout = timeoutMs;
             client.ReceiveTimeout = timeoutMs;
-            client.Connect(host, port);
+            IAsyncResult connectResult = client.BeginConnect(host, port, null, null);
+            using (connectResult.AsyncWaitHandle)
+            {
+                if (!connectResult.AsyncWaitHandle.WaitOne(timeoutMs))
+                {
+                    client.Close();
+                    client = null;
+                    throw new TimeoutException("TCP connection to " + EndpointDescription + " timed out.");
+                }
+                client.EndConnect(connectResult);
+            }
             stream = client.GetStream();
             stream.ReadTimeout = timeoutMs;
             stream.WriteTimeout = timeoutMs;

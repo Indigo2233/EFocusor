@@ -21,6 +21,8 @@ namespace ASCOM.EFucoser
         private bool lastMoving = false;
         private bool lastLink = false;
         private double lastTemp = 20.0;
+        private bool supportsHome;
+        private bool? temperatureSensorPresent;
 
         private long UPDATETICKS = (long)(1 * 10000000.0);
         private long lastUpdate = 0;
@@ -56,8 +58,6 @@ namespace ASCOM.EFucoser
         internal static int commandTimeoutMs;
         internal static bool traceState;
         internal static int maxStep;
-        internal static int stepSize = 1;
-
         private bool connectedState;
         private Util utilities;
         private AstroUtils astroUtilities;
@@ -82,7 +82,10 @@ namespace ASCOM.EFucoser
         public void SetupDialog()
         {
             if (IsConnected)
-                System.Windows.Forms.MessageBox.Show("Already connected, just press OK");
+            {
+                System.Windows.Forms.MessageBox.Show("Disconnect the focuser before opening setup.");
+                return;
+            }
 
             using (SetupDialogForm F = new SetupDialogForm())
             {
@@ -99,16 +102,18 @@ namespace ASCOM.EFucoser
             get
             {
                 var sa = new ArrayList();
-                sa.Add("Home");
+                if (supportsHome)
+                    sa.Add("Home");
                 return sa;
             }
         }
 
         public string Action(string actionName, string actionParameters)
         {
-            if (actionName == "Home")
+            CheckConnected("Action");
+            if (string.Equals(actionName, "Home", StringComparison.OrdinalIgnoreCase) && supportsHome)
             {
-                CommandString("H#", false);
+                ExecuteFirmwareCommand("H#");
                 return "";
             }
             throw new ASCOM.ActionNotImplementedException("Action " + actionName + " is not implemented by this driver");
@@ -155,17 +160,34 @@ namespace ASCOM.EFucoser
 
         public void Dispose()
         {
-            tl.Enabled = false;
-            tl.Dispose();
-            tl = null;
-            utilities.Dispose();
-            utilities = null;
-            astroUtilities.Dispose();
-            astroUtilities = null;
-
-            if (connection == null) return;
-            connection.Dispose();
-            connection = null;
+            connectedState = false;
+            lastLink = false;
+            if (connection != null)
+            {
+                connection.Dispose();
+                connection = null;
+            }
+            if (tl != null)
+            {
+                tl.Enabled = false;
+                tl.Dispose();
+                tl = null;
+            }
+            if (utilities != null)
+            {
+                utilities.Dispose();
+                utilities = null;
+            }
+            if (astroUtilities != null)
+            {
+                astroUtilities.Dispose();
+                astroUtilities = null;
+            }
+            if (mutex != null)
+            {
+                mutex.Dispose();
+                mutex = null;
+            }
         }
 
         public bool Connected
@@ -199,7 +221,11 @@ namespace ASCOM.EFucoser
                         tcpPort = ParseInt(GetProfileValue(p, tcpPortProfileName, tcpPortDefault), 4030);
                         commandTimeoutMs = ParseInt(GetProfileValue(p, commandTimeoutProfileName, commandTimeoutDefault), 3000);
                         contHold = GetProfileValue(p, "ContHold", "false").ToLowerInvariant().Equals("true");
-                        maxStep = ParseInt(GetProfileValue(p, "MaxStep", "20000"), 20000);
+                        string configuredMaxStep = p.GetValue(driverID, "MaxStep", string.Empty, string.Empty);
+                        int parsedMaxStep;
+                        bool hasConfiguredMaxStep = int.TryParse(configuredMaxStep, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedMaxStep)
+                            && parsedMaxStep > 0;
+                        maxStep = hasConfiguredMaxStep ? parsedMaxStep : 20000;
 
                         try
                         {
@@ -208,19 +234,28 @@ namespace ASCOM.EFucoser
                             connection.Connect();
                             connectedState = true;
                             lastLink = true;
+                            lastUpdate = 0;
+                            lastL = 0;
 
-                            ValidateDeviceIdentity();
+                            string identity = ValidateDeviceIdentity();
+                            supportsHome = !FocuserProtocol.IsArduinoNanoIdentity(identity);
 
-                            // Send maxStep to firmware
-                            if (IsTcpTransport())
-                                CommandString("D " + maxStep.ToString() + "#", false);
+                            FocuserDeviceInfo deviceInfo = FocuserProtocol.ParseDeviceInfo(ExecuteFirmwareCommand("I#"));
+                            temperatureSensorPresent = deviceInfo.TemperatureSensorPresent;
+                            if (deviceInfo.Temperature.HasValue)
+                                lastTemp = deviceInfo.Temperature.Value;
+
+                            if (hasConfiguredMaxStep)
+                                ExecuteFirmwareCommand("D " + maxStep.ToString(CultureInfo.InvariantCulture) + "#");
+                            else if (deviceInfo.MaxSteps.HasValue && deviceInfo.MaxSteps.Value > 0)
+                                maxStep = deviceInfo.MaxSteps.Value;
 
                             if (contHold)
-                                CommandString("C 1#", false);
+                                ExecuteFirmwareCommand("C 1#");
                             else
-                                CommandString("C 0#", false);
+                                ExecuteFirmwareCommand("C 0#");
 
-                            string ver = CommandString("V#", false);
+                            string ver = ExecuteFirmwareCommand("V#");
                             string verTrim = ver.Replace('#', ' ').Trim();
                             string versn = verTrim.Replace('V', ' ').Trim();
                             tl.LogMessage("Firmware Version", versn);
@@ -229,6 +264,8 @@ namespace ASCOM.EFucoser
                         {
                             connectedState = false;
                             lastLink = false;
+                            supportsHome = false;
+                            temperatureSensorPresent = null;
                             if (connection != null)
                             {
                                 connection.Dispose();
@@ -242,7 +279,7 @@ namespace ASCOM.EFucoser
                 {
                     try
                     {
-                        CommandString("C 0#", false);
+                        ExecuteFirmwareCommand("C 0#");
                     }
                     catch (Exception ex)
                     {
@@ -251,6 +288,10 @@ namespace ASCOM.EFucoser
                     System.Threading.Thread.Sleep(500);
                     connectedState = false;
                     lastLink = false;
+                    lastUpdate = 0;
+                    lastL = 0;
+                    supportsHome = false;
+                    temperatureSensorPresent = null;
                     if (connection != null)
                     {
                         tl.LogMessage("Connected Set", "Disconnecting from " + connection.EndpointDescription);
@@ -286,7 +327,7 @@ namespace ASCOM.EFucoser
             get
             {
                 Version version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                string driverVersion = String.Format(CultureInfo.InvariantCulture, "{0}.{1}.{2}.{3}", version.Major, version.Minor, version.Build, version.Revision);
+                string driverVersion = String.Format(CultureInfo.InvariantCulture, "{0}.{1}", version.Major, version.Minor);
                 tl.LogMessage("DriverVersion Get", driverVersion);
                 return driverVersion;
             }
@@ -317,6 +358,7 @@ namespace ASCOM.EFucoser
         {
             get
             {
+                CheckConnected("Absolute");
                 tl.LogMessage("Absolute Get", true.ToString());
                 return true;
             }
@@ -355,6 +397,7 @@ namespace ASCOM.EFucoser
         {
             get
             {
+                CheckConnected("MaxIncrement");
                 tl.LogMessage("MaxIncrement Get", maxStep.ToString());
                 return maxStep;
             }
@@ -364,6 +407,7 @@ namespace ASCOM.EFucoser
         {
             get
             {
+                CheckConnected("MaxStep");
                 tl.LogMessage("MaxStep Get", maxStep.ToString());
                 return maxStep;
             }
@@ -382,8 +426,8 @@ namespace ASCOM.EFucoser
         {
             get
             {
-                tl.LogMessage("StepSize Get", stepSize.ToString());
-                return (double)stepSize;
+                CheckConnected("StepSize");
+                throw new ASCOM.PropertyNotImplementedException("StepSize", false);
             }
         }
 
@@ -391,12 +435,16 @@ namespace ASCOM.EFucoser
         {
             get
             {
+                CheckConnected("TempComp");
                 tl.LogMessage("TempComp Get", false.ToString());
                 return false;
             }
             set
             {
-                tl.LogMessage("TempComp Set Ignored", value.ToString());
+                CheckConnected("TempComp");
+                if (value)
+                    throw new ASCOM.PropertyNotImplementedException("TempComp", true);
+                tl.LogMessage("TempComp Set", false.ToString());
             }
         }
 
@@ -404,6 +452,7 @@ namespace ASCOM.EFucoser
         {
             get
             {
+                CheckConnected("TempCompAvailable");
                 tl.LogMessage("TempCompAvailable Get", false.ToString());
                 return false;
             }
@@ -413,38 +462,37 @@ namespace ASCOM.EFucoser
         {
             get
             {
-                try
-                {
-                    string resp = CommandString("I#", false);
-                    // Extract lastTemp from JSON
-                    var match = System.Text.RegularExpressions.Regex.Match(resp, "\"lastTemp\":(-?[0-9]+(?:\\.[0-9]+)?)");
-                    if (match.Success)
-                    {
-                        double temp;
-                        if (double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out temp))
-                        {
-                            lastTemp = temp;
-                            return temp;
-                        }
-                    }
-                }
-                catch { }
+                CheckConnected("Temperature");
+                FocuserDeviceInfo deviceInfo = FocuserProtocol.ParseDeviceInfo(ExecuteFirmwareCommand("I#"));
+                if (deviceInfo.TemperatureSensorPresent.HasValue)
+                    temperatureSensorPresent = deviceInfo.TemperatureSensorPresent;
+                if (temperatureSensorPresent == false)
+                    throw new ASCOM.PropertyNotImplementedException("Temperature", false);
+                if (!deviceInfo.Temperature.HasValue)
+                    throw new ASCOM.DriverException("Focuser returned no valid temperature value.");
+
+                lastTemp = deviceInfo.Temperature.Value;
                 return lastTemp;
             }
         }
 
         public void Halt()
         {
-            CommandString("S#", false);
+            ExecuteFirmwareCommand("S#");
             tl.LogMessage("Halt", "Stopped");
         }
 
         public void Move(int position)
         {
-            if (position < 0) position = 0;
-            if (position > maxStep) position = maxStep;
+            CheckConnected("Move");
+            if (position < 0 || position > maxStep)
+                throw new ASCOM.InvalidValueException(
+                    "Move",
+                    position.ToString(CultureInfo.InvariantCulture),
+                    "0",
+                    maxStep.ToString(CultureInfo.InvariantCulture));
 
-            CommandString("M " + position.ToString() + "#", false);
+            ExecuteFirmwareCommand("M " + position.ToString(CultureInfo.InvariantCulture) + "#");
             lastMoving = true;
             tl.LogMessage("Move", position.ToString());
         }
@@ -452,7 +500,7 @@ namespace ASCOM.EFucoser
         public void TemperatureSet(double temperature)
         {
             int tempInt = (int)Math.Round(temperature * 100.0);
-            CommandString("E " + tempInt.ToString() + "#", false);
+            ExecuteFirmwareCommand("E " + tempInt.ToString(CultureInfo.InvariantCulture) + "#");
             tl.LogMessage("TemperatureSet", temperature.ToString("F2"));
         }
 
@@ -462,24 +510,15 @@ namespace ASCOM.EFucoser
         {
             if (DateTime.Now.Ticks > UPDATETICKS + lastUpdate)
             {
+                string response = ExecuteFirmwareCommand("G#");
+                int position;
+                bool moving;
+                if (!FocuserProtocol.TryParseMotionStatus(response, out position, out moving))
+                    throw new ASCOM.DriverException("Invalid focuser status response: " + response);
+
+                lastPos = position;
+                lastMoving = moving;
                 lastUpdate = DateTime.Now.Ticks;
-                try
-                {
-                    string val = CommandString("G#", false);
-                    // Response: "P <steps>;M <true|false>#"
-                    string[] vals = val.Replace('#', ' ').Trim().Split(';');
-                    if (vals.Length >= 2)
-                    {
-                        string valTrim = vals[0].Replace('#', ' ');
-                        string pos = valTrim.Replace('P', ' ').Trim();
-                        lastPos = Convert.ToInt32(pos);
-                        lastMoving = vals[1].Substring(2) == "true";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    tl.LogMessage("DoUpdate error", ex.Message);
-                }
             }
         }
 
@@ -500,19 +539,27 @@ namespace ASCOM.EFucoser
 
             if (string.IsNullOrWhiteSpace(comPort))
                 throw new ASCOM.NotConnectedException("No COM port selected");
-            return new SerialFocuserConnection(comPort);
+            return new SerialFocuserConnection(comPort, commandTimeoutMs);
         }
 
-        private void ValidateDeviceIdentity()
+        private string ValidateDeviceIdentity()
         {
             string identity = CommandString("#", false).Replace('#', ' ').Trim();
             tl.LogMessage("Device Identity", identity);
 
             if (IsExpectedFocuserIdentity(identity))
-                return;
+                return identity;
 
             throw new ASCOM.NotConnectedException(
                 "Connected device is not an EFucoser focuser. Response: " + identity);
+        }
+
+        private string ExecuteFirmwareCommand(string command)
+        {
+            string response = CommandString(command, false);
+            if (FocuserProtocol.IsErrorResponse(response))
+                throw new ASCOM.DriverException("Focuser rejected command " + command + ": " + response.Trim());
+            return response;
         }
 
         internal static bool IsExpectedFocuserIdentity(string identity)

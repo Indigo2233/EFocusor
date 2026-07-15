@@ -67,6 +67,7 @@
   <ItemGroup>
     <Compile Include="Driver.cs" />
     <Compile Include="FocuserConnection.cs" />
+    <Compile Include="FocuserProtocol.cs" />
     <Compile Include="SetupDialogForm.cs" />
     <Compile Include="SetupDialogForm.designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

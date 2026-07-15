@@ -204,10 +204,17 @@ namespace ASCOM.EFucoser
 
         private void RefreshComPorts()
         {
+            string selectedPort = comboBoxComPort.Text;
             comboBoxComPort.Items.Clear();
             string[] ports = SerialPort.GetPortNames();
             comboBoxComPort.Items.AddRange(ports);
-            if (ports.Length > 0 && !comboBoxComPort.Items.Contains(comboBoxComPort.Text))
+            if (!string.IsNullOrWhiteSpace(selectedPort))
+            {
+                if (!comboBoxComPort.Items.Contains(selectedPort))
+                    comboBoxComPort.Items.Add(selectedPort);
+                comboBoxComPort.Text = selectedPort;
+            }
+            else if (ports.Length > 0)
                 comboBoxComPort.SelectedIndex = 0;
             lblDetectStatus.Text = ports.Length > 0
                 ? $"Found {ports.Length} COM port(s)"
@@ -251,15 +258,15 @@ namespace ASCOM.EFucoser
                         sp.ReadTimeout = 1500;
                         sp.WriteTimeout = 1500;
                         sp.Open();
+                        System.Threading.Thread.Sleep(2200);
                         sp.DiscardInBuffer();
                         sp.DiscardOutBuffer();
 
                         // Send version query - EFucoser responds "V <version>#"
                         sp.Write("V#");
-                        System.Threading.Thread.Sleep(300);
 
                         var sb = new StringBuilder();
-                        var deadline = DateTime.Now.AddMilliseconds(1000);
+                        var deadline = DateTime.Now.AddMilliseconds(1500);
                         while (DateTime.Now < deadline)
                         {
                             try
@@ -321,6 +328,12 @@ namespace ASCOM.EFucoser
                 : "TCP";
 
             RefreshComPorts();
+            if (!string.IsNullOrWhiteSpace(Focuser.comPort))
+            {
+                if (!comboBoxComPort.Items.Contains(Focuser.comPort))
+                    comboBoxComPort.Items.Add(Focuser.comPort);
+                comboBoxComPort.Text = Focuser.comPort;
+            }
 
             using (ASCOM.Utilities.Profile p = new Utilities.Profile())
             {
