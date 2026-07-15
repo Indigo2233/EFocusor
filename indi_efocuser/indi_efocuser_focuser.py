@@ -206,10 +206,11 @@ class EFocuserINDI:
                 _def_text("DRIVER_INTERFACE", "Interface", "2")
             ))
 
-        # Port text
+        # Port text — prefer /dev/ttyUSB* if present, fall back to user-set port
         ports = SerialIO.ports()
-        p = ports[0] if ports else "/dev/ttyUSB0"
-        if not self.port:
+        usb_ports = [p for p in ports if "ttyUSB" in p]
+        p = usb_ports[0] if usb_ports else (ports[0] if ports else "/dev/ttyUSB0")
+        if not self.port or "ttyS" in self.port:
             self.port = p
         if wanted("DEVICE_PORT"):
             self._out("defTextVector", {
