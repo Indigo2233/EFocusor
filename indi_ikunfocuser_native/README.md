@@ -55,7 +55,8 @@ python tools/stage_indi_core.py /path/to/indi
 
 Review the resulting INDI diff and build the `indi_ikun_focuser` target.
 See [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md) for the complete release
-gate.
+gate. A temporary, non-installing Linux hardware test procedure is available in
+[LINUX_PRE_PR_TEST.md](LINUX_PRE_PR_TEST.md).
 
 On Windows, the current INDI headers can also be checked without linking a
 driver binary:

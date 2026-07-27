@@ -14,7 +14,7 @@
 - [x] Current INDI `master` header syntax check with warnings as errors
 - [x] Clean and idempotent INDI core staging
 - [x] Linux CI workflow prepared
-- [ ] Linux x86_64 CI completed successfully
+- [x] Linux x86_64 CI completed successfully
 - [ ] Linux ARM64 build completed successfully
 
 ## Firmware
