@@ -258,8 +258,12 @@ String processCommand(String command) {
       Serial.print("#");
       return "";
     case 'D':
-      if (value <= 0) {
+      if (value < 100 || value > 9999999L) {
         return "ERR:max_steps#";
+      }
+      if (value < driverToPhysicalSteps(stepper.currentPosition())
+          || value < driverToPhysicalSteps(stepper.targetPosition())) {
+        return "ERR:max_steps_below_position_or_target#";
       }
       settings.maxSteps = value;
       clampHomeOffset();
@@ -274,7 +278,7 @@ String processCommand(String command) {
       settings.lastTemp = value / 100.0F;
       return String("E ") + String(settings.lastTemp, 2) + "#";
     case 'X':
-      if (value <= 0) {
+      if (value < 1 || value > 2000) {
         return "ERR:speed#";
       }
       settings.maxSpeed = (int)value;
@@ -282,7 +286,7 @@ String processCommand(String command) {
       saveSettings();
       return String("X ") + settings.maxSpeed + "#";
     case 'A':
-      if (value <= 0) {
+      if (value < 1 || value > 10000) {
         return "ERR:acceleration#";
       }
       settings.acceleration = (int)value;

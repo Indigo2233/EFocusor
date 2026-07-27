@@ -60,6 +60,8 @@ Text commands (`#`-terminated):
 - `V#`: firmware version
 - `I#`: JSON status
 - `D <maxSteps>#`: set max steps range
+- `X <stepsPerSecond>#`: set maximum motor speed
+- `A <stepsPerSecondSquared>#`: set motor acceleration
 - `T <coeff*1000>#`: set temperature coefficient
 - `E <temp*100>#`: update current temperature
 

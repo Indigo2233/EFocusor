@@ -2,6 +2,15 @@
 **/bin/
 **/obj/
 dist/
+.build/
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+Testing/
+CTestTestfile.cmake
+cmake_install.cmake
+Makefile
 
 # Arduino build
 *.bin

@@ -132,9 +132,12 @@ The following public identities and protocol surfaces are retained:
 - AP password: `012345678`
 - ASCOM driver can use the same TCP or serial protocol
 
-The firmware version for this variant is `1101`, and the identification string
+The firmware version for this variant is `1103`, and the identification string
 is:
 
 ```text
-EFucoser ESP8266 ULN2003 Focuser ver 1101
+EFucoser ESP8266 ULN2003 Focuser ver 1103
 ```
+
+Version 1103 adds the `X <speed>#` and `A <acceleration>#` commands required by
+the native INDI driver.

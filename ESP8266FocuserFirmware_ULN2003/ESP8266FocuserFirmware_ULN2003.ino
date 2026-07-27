@@ -20,8 +20,8 @@
 #define USE_HALL_SENSOR 0
 #define HALL_PIN 16   // D0, optional Hall input. Requires external 10k pull-up to 3.3V.
 
-#define DEVICE_RESPONSE "EFucoser ESP8266 ULN2003 Focuser ver 1102"
-#define FIRMWARE_VERSION 1102
+#define DEVICE_RESPONSE "EFucoser ESP8266 ULN2003 Focuser ver 1103"
+#define FIRMWARE_VERSION 1103
 #define EEPROM_SIZE 512
 #define SETTINGS_MAGIC 0xEF0C2003UL
 #define MEMORY_MAGIC 0x4D454D35UL
@@ -179,8 +179,8 @@ input{width:100%;background:#121720;color:var(--text);border:1px solid var(--lin
 <button class="toggle" id="reverse">反向</button>
 <label>每圈步数<input id="stepsPerRev" type="number" min="1" step="1"></label>
 <label>最大行程（步）<input id="maxStepsSetting" type="number" min="1" step="1"></label>
-<label>最大速度<input id="maxSpeed" type="number" min="1" step="1"></label>
-<label>加速度<input id="acceleration" type="number" min="1" step="1"></label>
+<label>最大速度<input id="maxSpeed" type="number" min="1" max="2000" step="1"></label>
+<label>加速度<input id="acceleration" type="number" min="1" max="10000" step="1"></label>
 <label>手动步长<input id="manualStep" type="number" min="1" step="1"></label>
 <label>联网 Wi-Fi 名称<input id="staSsid" type="text" maxlength="31"></label>
 <label>联网 Wi-Fi 密码<input id="staPassword" type="password" maxlength="63"></label>
@@ -667,8 +667,13 @@ String processCommand(String command) {
     case 'D':
       {
         // D <maxSteps># - set max steps and recompute range
-        if (value <= 0) {
+        if (value < 100 || value > 9999999L) {
           return "ERR:max_steps#";
+        }
+        long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
+        long targetPhysical = driverToPhysicalSteps(stepper.targetPosition());
+        if (value < currentPhysical || value < targetPhysical) {
+          return "ERR:max_steps_below_position_or_target#";
         }
         settings.maxSteps = value;
         clampHomeOffset();
@@ -692,6 +697,30 @@ String processCommand(String command) {
         settings.lastTemp = value / 100.0F;
         broadcastStatus();
         return String("E ") + String(settings.lastTemp, 2) + "#";
+      }
+    case 'X':
+      {
+        // X <steps/sec># - set maximum motor speed
+        if (value < 1 || value > 2000) {
+          return "ERR:speed#";
+        }
+        settings.maxSpeed = (int)value;
+        applyMotionSettings();
+        saveSettings();
+        broadcastStatus();
+        return String("X ") + settings.maxSpeed + "#";
+      }
+    case 'A':
+      {
+        // A <steps/sec^2># - set motor acceleration
+        if (value < 1 || value > 10000) {
+          return "ERR:acceleration#";
+        }
+        settings.acceleration = (int)value;
+        applyMotionSettings();
+        saveSettings();
+        broadcastStatus();
+        return String("A ") + settings.acceleration + "#";
       }
     default:
       return String("ERR:") + code + "#";
@@ -844,7 +873,7 @@ void handleSettingsPostApi() {
     long newMaxSteps = lround(numberValue);
     long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
     long targetPhysical = driverToPhysicalSteps(stepper.targetPosition());
-    if (newMaxSteps <= 0) {
+    if (newMaxSteps < 100 || newMaxSteps > 9999999L) {
       sendJson(400, "{\"error\":\"invalid_max_steps\"}");
       return;
     }
@@ -863,10 +892,18 @@ void handleSettingsPostApi() {
   if (extractNumber(body, "stepsPerRev", numberValue) && numberValue > 0) {
     settings.stepsPerRev = (int)numberValue;
   }
-  if (extractNumber(body, "maxSpeed", numberValue) && numberValue > 0) {
+  if (extractNumber(body, "maxSpeed", numberValue)) {
+    if (numberValue < 1 || numberValue > 2000) {
+      sendJson(400, "{\"error\":\"invalid_max_speed\"}");
+      return;
+    }
     settings.maxSpeed = (int)numberValue;
   }
-  if (extractNumber(body, "acceleration", numberValue) && numberValue > 0) {
+  if (extractNumber(body, "acceleration", numberValue)) {
+    if (numberValue < 1 || numberValue > 10000) {
+      sendJson(400, "{\"error\":\"invalid_acceleration\"}");
+      return;
+    }
     settings.acceleration = (int)numberValue;
   }
   if (extractNumber(body, "manualStep", numberValue) && numberValue > 0) {

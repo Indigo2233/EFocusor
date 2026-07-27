@@ -78,6 +78,8 @@ The firmware implements the same serial protocol used by the ASCOM driver:
 | `V#` | Firmware version |
 | `I#` | JSON status |
 | `D <maxSteps>#` | Set maximum position range |
+| `X <steps/s>#` | Set maximum motor speed, range 1–2000 |
+| `A <steps/s²>#` | Set acceleration, range 1–10000 |
 | `T <coeff*1000>#` | Store temperature coefficient for compatibility |
 | `E <temp*100>#` | Set temperature for compatibility |
 

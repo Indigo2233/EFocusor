@@ -26,6 +26,9 @@ focuser use with linear position control.
   - ASCOM focuser driver source. Public ASCOM identity: `ASCOM.EFucoser.Focuser`.
 - `driver/FocuserTest/`
   - Simple Windows Forms ASCOM test client.
+- `indi_efocuser_native/`
+  - Native C++ INDI focuser driver, protocol tests, upstream staging tool, and
+    submission documentation.
 - `AGENTS.md`
   - Detailed implementation notes for development agents.
 
@@ -80,6 +83,8 @@ All commands are `#`-terminated:
 | `R <0\|1>#` | Set direction inversion |
 | `C <0\|1>#` | Set continuous hold |
 | `D <maxSteps>#` | Set max steps range |
+| `X <steps/s>#` | Set maximum motor speed |
+| `A <steps/s²>#` | Set motor acceleration |
 | `T <coeff * 1000>#` | Set temperature compensation coefficient |
 | `E <temp * 100>#` | Update current temperature |
 | `V#` | Firmware version |
@@ -94,6 +99,11 @@ All commands are `#`-terminated:
 ### ASCOM Driver
 - Visual Studio with .NET Framework 4.8
 - ASCOM Platform 6 Developer Components
+
+### INDI Driver
+- Linux or macOS
+- libindi development files
+- CMake and a C++17 compiler
 
 ## ASCOM Driver Installer
 

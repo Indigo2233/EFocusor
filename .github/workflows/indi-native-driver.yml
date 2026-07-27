@@ -1,0 +1,75 @@
+name: INDI native driver
+
+on:
+  push:
+    paths:
+      - "indi_efocuser_native/**"
+      - ".github/workflows/indi-native-driver.yml"
+  pull_request:
+    paths:
+      - "indi_efocuser_native/**"
+      - ".github/workflows/indi-native-driver.yml"
+
+jobs:
+  protocol-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build protocol tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror \
+            -Iindi_efocuser_native \
+            indi_efocuser_native/efucoser_protocol.cpp \
+            indi_efocuser_native/tests/efucoser_protocol_tests.cpp \
+            -o efucoser_protocol_tests
+      - name: Run protocol tests
+        run: ./efucoser_protocol_tests
+      - name: Check firmware protocol consistency
+        run: python3 -m unittest indi_efocuser_native/tests/test_firmware_protocol_consistency.py
+
+  indi-core-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install INDI build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build git \
+            libcfitsio-dev libnova-dev libusb-1.0-0-dev \
+            libjpeg-dev libcurl4-gnutls-dev zlib1g-dev \
+            libgsl-dev libev-dev
+      - name: Clone INDI
+        run: git clone --depth 1 https://github.com/indilib/indi.git indi-core
+      - name: Stage EFucoser
+        run: python3 indi_efocuser_native/tools/stage_indi_core.py indi-core
+      - name: Check staged diff
+        run: git -C indi-core diff --check
+      - name: Configure INDI
+        run: cmake -S indi-core -B indi-core/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build EFucoser
+        run: cmake --build indi-core/build --target indi_efucoser_focuser
+
+  firmware-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install Arduino cores and libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://arduino.esp8266.com/stable/package_esp8266com_index.json
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.8
+          arduino-cli core install esp8266:esp8266@3.1.2
+          arduino-cli lib install "AccelStepper@1.64"
+          arduino-cli lib install "WebSockets@2.7.2"
+          arduino-cli lib install "OneWire@2.3.8"
+          arduino-cli lib install "DallasTemperature@4.0.6"
+      - name: Build ESP8266 STEP-DIR firmware
+        run: arduino-cli compile --fqbn esp8266:esp8266:d1_mini ESP8266FocuserFirmware
+      - name: Build ESP8266 ULN2003 firmware
+        run: arduino-cli compile --fqbn esp8266:esp8266:d1_mini ESP8266FocuserFirmware_ULN2003
+      - name: Build Arduino Nano ULN2003 firmware
+        run: arduino-cli compile --fqbn arduino:avr:nano:cpu=atmega328old ArduinoNanoFocuserFirmware_ULN2003
