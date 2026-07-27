@@ -18,10 +18,13 @@
 #define CCW_PIN 0     // D3 (GPIO0) - NOT D0/GPIO16 (no internal pull-up!)
 #define TEMP_PIN 2    // D4, DS18B20 DATA with 4.7k pull-up to 3.3V
 
-#define DEVICE_RESPONSE "EFucoser ESP8266 Focuser ver 1001"
-#define FIRMWARE_VERSION 1001
+#define DEVICE_RESPONSE "EFucoser ESP8266 Focuser ver 1004"
+#define FIRMWARE_VERSION 1004
 #define EEPROM_SIZE 512
 #define SETTINGS_MAGIC 0xEF0C115EUL
+#define MEMORY_MAGIC 0x4D454D35UL
+#define MEMORY_SLOT_COUNT 5
+#define MEMORY_NAME_LENGTH 48
 #define ASCOM_TCP_PORT 4030
 #define WEBSOCKET_PORT 81
 #define MAX_TCP_CLIENTS 4
@@ -51,7 +54,13 @@ struct FocuserSettings {
   bool tempComp;
   float tempCoeff;
   float lastTemp;
+  uint32_t memoryMagic;
+  long memoryPositions[MEMORY_SLOT_COUNT];
+  bool memoryValid[MEMORY_SLOT_COUNT];
+  char memoryNames[MEMORY_SLOT_COUNT][MEMORY_NAME_LENGTH];
 };
+
+static_assert(sizeof(FocuserSettings) <= EEPROM_SIZE, "FocuserSettings exceeds EEPROM allocation");
 
 FocuserSettings settings;
 AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
@@ -87,11 +96,11 @@ const unsigned long tempConversionMs = 750;
 
 const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>EFucoser Focuser</title>
+<title>EFucoser 电子调焦器</title>
 <style>
 :root{color-scheme:dark;--bg:#111318;--panel:#1a1f28;--panel2:#202734;--line:#384252;--text:#f2f5f8;--muted:#aeb8c6;--accent:#4db6ac;--warn:#f4b24e;--danger:#ee6b63;--ok:#7bc96f}
 body.red{--accent:#cc4444;--ok:#bb3333;--warn:#d4883a;--danger:#881111;--muted:#996666;--text:#eecccc;--panel2:#2a1a1a;--line:#4a3030}
@@ -125,48 +134,59 @@ input{width:100%;background:#121720;color:var(--text);border:1px solid var(--lin
 .small{font-size:12px;color:var(--muted)}
 .progress-bar{width:100%;height:12px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:8px;transition:background .3s}
 .progress-fill{height:100%;background:var(--accent);border-radius:6px;transition:width .3s,background .3s}
+.memory-list{display:grid;gap:8px}
+.memory-row{display:grid;grid-template-columns:minmax(0,1fr) 92px 72px 72px;gap:8px;align-items:center}
+.memory-position{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.memory-row button{min-height:42px;padding:0 8px}
+@media (max-width:520px){.memory-row{grid-template-columns:minmax(0,1fr) 82px}.memory-row button{grid-row:2}.memory-row button:first-of-type{grid-column:1}.memory-row button:last-of-type{grid-column:2}.memory-position{grid-column:2;grid-row:1}}
 @media (min-width:680px){.grid{grid-template-columns:1fr 1fr}.span{grid-column:1/-1}}
 </style>
 </head>
 <body>
 <main>
 <header>
-<h1>EFucoser Focuser</h1>
-<button class="night" id="nightToggle" title="Red light mode">🌙</button>
-<div class="status" id="link">Connecting</div>
+<h1>EFucoser 电子调焦器</h1>
+<button class="night" id="nightToggle" title="夜视红光模式">🌙</button>
+<div class="status" id="link">连接中</div>
 </header>
 <div class="grid">
 <section class="span">
 <div class="readout">
-<div class="metric"><span>Position</span><strong id="position">--</strong></div>
-<div class="metric"><span>Max Steps</span><strong id="maxSteps">--</strong></div>
-<div class="metric"><span>Temperature</span><strong id="temperature">--</strong></div>
+<div class="metric"><span>当前位置</span><strong id="position">--</strong></div>
+<div class="metric"><span>最大行程</span><strong id="maxSteps">--</strong></div>
+<div class="metric"><span>温度</span><strong id="temperature">--</strong></div>
 </div>
 <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
 </section>
+<section class="span">
+<div class="row"><strong>器材记忆点</strong><span class="small">保存并调用不同器材的对焦位置</span></div>
+<div class="memory-list" id="memoryList"></div>
+</section>
 <section>
 <div class="form">
-<label class="wide">Target Position (steps)<input id="targetPosition" type="number" min="0" step="1" value="0"></label>
-<button class="primary wide" id="moveAbsolute">Move</button>
+<label class="wide">目标位置（步）<input id="targetPosition" type="number" min="0" step="1" value="0"></label>
+<button class="primary wide" id="moveAbsolute">移动</button>
 <button data-rel="-1000">-1000</button><button data-rel="-100">-100</button><button data-rel="-10">-10</button>
 <button data-rel="10">+10</button><button data-rel="100">+100</button><button data-rel="1000">+1000</button>
-<button class="danger" id="halt">STOP</button><button id="home">Home</button><button id="setZero">Set 0</button>
+<button class="danger" id="halt">停止</button><button id="home">回零</button><button id="setZero">设为零点</button>
 </div>
 </section>
 <section>
 <div class="form">
-<button class="toggle" id="hold">Hold</button>
-<button class="toggle" id="reverse">Reverse</button>
-<label>Steps/rev<input id="stepsPerRev" type="number" min="1" step="1"></label>
-<label>Max Speed<input id="maxSpeed" type="number" min="1" step="1"></label>
-<label>Acceleration<input id="acceleration" type="number" min="1" step="1"></label>
-<label>Manual step<input id="manualStep" type="number" min="1" step="1"></label>
-<label>STA SSID<input id="staSsid" type="text" maxlength="31"></label>
-<label>STA Password<input id="staPassword" type="password" maxlength="63"></label>
-<label>Static IP<input id="staIp" type="text" maxlength="15" placeholder="DHCP if empty"></label>
-<label>Gateway<input id="staGateway" type="text" maxlength="15" placeholder="192.168.4.1"></label>
-<label>Subnet<input id="staSubnet" type="text" maxlength="15" placeholder="255.255.255.0"></label>
-<button class="primary wide" id="saveSettings">Save settings</button>
+<button class="toggle" id="hold">保持力矩</button>
+<button class="toggle" id="reverse">反向</button>
+<label>每圈步数<input id="stepsPerRev" type="number" min="1" step="1"></label>
+<label>最大行程（步）<input id="maxStepsSetting" type="number" min="1" step="1"></label>
+<label>最大速度<input id="maxSpeed" type="number" min="1" step="1"></label>
+<label>加速度<input id="acceleration" type="number" min="1" step="1"></label>
+<label>手动步长<input id="manualStep" type="number" min="1" step="1"></label>
+<label>联网 Wi-Fi 名称<input id="staSsid" type="text" maxlength="31"></label>
+<label>联网 Wi-Fi 密码<input id="staPassword" type="password" maxlength="63"></label>
+<label>固定 IP<input id="staIp" type="text" maxlength="15" placeholder="留空使用 DHCP"></label>
+<label>网关<input id="staGateway" type="text" maxlength="15" placeholder="192.168.4.1"></label>
+<label>子网掩码<input id="staSubnet" type="text" maxlength="15" placeholder="255.255.255.0"></label>
+<button class="primary wide" id="saveSettings">保存设置</button>
+<div class="small wide" id="settingsMessage"></div>
 <div class="small wide" id="network"></div>
 </div>
 </section>
@@ -178,21 +198,27 @@ let state={};
 async function api(path,body){
  const opt=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
  const res=await fetch(path,opt);
- if(!res.ok)throw new Error(path);
- return res.json();
+ const data=await res.json();
+ if(!res.ok){
+  const error=new Error(data.error||path);
+  error.code=data.error||'request_failed';
+  throw error;
+ }
+ return data;
 }
 function setState(s){
  state=s;
  $('position').textContent=String(s.positionSteps??0);
  $('maxSteps').textContent=String(s.maxSteps??0);
  const temp=Number(s.lastTemp);
- $('temperature').textContent=Number.isFinite(temp)?temp.toFixed(2)+' C':'--';
+ $('temperature').textContent=Number.isFinite(temp)?temp.toFixed(2)+' °C':'--';
  const pct=s.maxSteps>0?((s.positionSteps??0)/s.maxSteps*100):0;
  $('progressFill').style.width=Math.min(100,Math.max(0,pct))+'%';
- $('link').textContent=s.isMoving?'Moving':'Ready';
+ $('link').textContent=s.isMoving?'正在移动':'就绪';
  $('hold').classList.toggle('active',!!s.hold);
  $('reverse').classList.toggle('active',!!s.reversed);
  $('stepsPerRev').value=s.stepsPerRev??200;
+ if(document.activeElement!==$('maxStepsSetting'))$('maxStepsSetting').value=s.maxSteps??20000;
  $('maxSpeed').value=s.maxSpeed??800;
  $('acceleration').value=s.acceleration??1000;
  $('manualStep').value=s.manualStep??50;
@@ -200,13 +226,40 @@ function setState(s){
  if(document.activeElement!==$('staIp'))$('staIp').value=s.staIp||'';
  if(document.activeElement!==$('staGateway'))$('staGateway').value=s.staGateway||'';
  if(document.activeElement!==$('staSubnet'))$('staSubnet').value=s.staSubnet||'';
- const staIp=s.staIp&&s.staIp!=='0.0.0.0'?s.staIp:'not connected';
- $('network').textContent='AP: '+(s.apIp||'192.168.4.1')+' | STA: '+staIp+' | TCP: '+(s.tcpPort||4030);
+ const staIp=s.staIp&&s.staIp!=='0.0.0.0'?s.staIp:'未连接';
+ $('network').textContent='热点: '+(s.apIp||'192.168.4.1')+' | 联网: '+staIp+' | TCP: '+(s.tcpPort||4030);
 }
-async function refresh(){try{setState(await api('/api/status'));}catch(e){$('link').textContent='Disconnected';}}
+function renderMemories(data){
+ const list=$('memoryList');
+ list.textContent='';
+ (data.memories||[]).forEach(m=>{
+  const row=document.createElement('div');
+  row.className='memory-row';
+  const name=document.createElement('input');
+  name.type='text';
+  name.maxLength=15;
+  name.value=m.name||('器材 '+(m.slot+1));
+  name.setAttribute('aria-label','器材名称 '+(m.slot+1));
+  const position=document.createElement('div');
+  position.className='memory-position';
+  position.textContent=m.valid?String(m.position)+' 步':'未保存';
+  const save=document.createElement('button');
+  save.textContent='保存';
+  save.onclick=()=>api('/api/memories',{slot:m.slot,action:'save',name:name.value.trim()}).then(renderMemories);
+  const move=document.createElement('button');
+  move.className='primary';
+  move.textContent='移动';
+  move.disabled=!m.valid;
+  move.onclick=()=>api('/api/memories',{slot:m.slot,action:'move'}).then(()=>refresh());
+  row.append(name,position,save,move);
+  list.append(row);
+ });
+}
+async function refresh(){try{setState(await api('/api/status'));}catch(e){$('link').textContent='已断开';}}
+async function refreshMemories(){try{renderMemories(await api('/api/memories'));}catch(_){}}
 function connectWs(){
  const ws=new WebSocket('ws://'+location.hostname+':81/');
- ws.onopen=()=>{$('link').textContent='Connected'};
+ ws.onopen=()=>{$('link').textContent='已连接'};
  ws.onmessage=e=>{try{setState(JSON.parse(e.data));}catch(_){}};
  ws.onclose=()=>{setTimeout(connectWs,1200);};
 }
@@ -217,9 +270,10 @@ $('home').onclick=()=>api('/api/home',{}).then(setState);
 $('setZero').onclick=()=>api('/api/set-position',{steps:0}).then(setState);
 $('hold').onclick=()=>api('/api/settings',{hold:!state.hold}).then(setState);
 $('reverse').onclick=()=>api('/api/settings',{reversed:!state.reversed}).then(setState);
-$('saveSettings').onclick=()=>{
+$('saveSettings').onclick=async()=>{
  const body={
   stepsPerRev:Number($('stepsPerRev').value),
+  maxSteps:Number($('maxStepsSetting').value),
   maxSpeed:Number($('maxSpeed').value),
   acceleration:Number($('acceleration').value),
   manualStep:Number($('manualStep').value)
@@ -229,9 +283,16 @@ $('saveSettings').onclick=()=>{
  if($('staIp').value.trim())body.staIp=$('staIp').value.trim();
  if($('staGateway').value.trim())body.staGateway=$('staGateway').value.trim();
  if($('staSubnet').value.trim())body.staSubnet=$('staSubnet').value.trim();
- api('/api/settings',body).then(setState);
+ try{
+  setState(await api('/api/settings',body));
+  $('settingsMessage').textContent='设置已保存';
+ }catch(e){
+  $('settingsMessage').textContent=e.code==='max_steps_below_position_or_target'
+   ?'保存失败：最大行程不能小于当前位置或当前目标位置'
+   :'保存失败，请检查输入值';
+ }
 };
-// Red light (night) mode - persisted in localStorage
+// 夜视红光模式，保存在浏览器本地存储中
 (function(){
  const night=localStorage.getItem('efucoser_night')==='1';
  if(night)document.body.classList.add('red');
@@ -244,6 +305,7 @@ $('saveSettings').onclick=()=>{
 })();
 connectWs();
 refresh();
+refreshMemories();
 setInterval(refresh,5000);
 </script>
 </body>
@@ -259,9 +321,20 @@ void saveSettings() {
   EEPROM.commit();
 }
 
+void initializeMemorySlots() {
+  settings.memoryMagic = MEMORY_MAGIC;
+  for (int i = 0; i < MEMORY_SLOT_COUNT; i++) {
+    settings.memoryPositions[i] = 0;
+    settings.memoryValid[i] = false;
+    String defaultName = String("器材 ") + (i + 1);
+    defaultName.toCharArray(settings.memoryNames[i], MEMORY_NAME_LENGTH);
+  }
+}
+
 void loadSettings() {
   EEPROM.begin(EEPROM_SIZE);
   EEPROM.get(0, settings);
+  bool settingsChanged = false;
   if (settings.magic != SETTINGS_MAGIC || settings.stepsPerRev <= 0) {
     memset(&settings, 0, sizeof(settings));
     settings.magic = SETTINGS_MAGIC;
@@ -278,14 +351,45 @@ void loadSettings() {
     settings.tempComp = false;
     settings.tempCoeff = 0.0F;
     settings.lastTemp = 20.0F;
-    EEPROM.put(0, settings);
-    EEPROM.commit();
+    initializeMemorySlots();
+    settingsChanged = true;
   }
   if (settings.maxSteps <= 0) {
     settings.maxSteps = (long)settings.stepsPerRev * 100L;
+    settingsChanged = true;
   }
   if (settings.homeOffsetSteps < 0 || settings.homeOffsetSteps > settings.maxSteps) {
     settings.homeOffsetSteps = 0;
+    settingsChanged = true;
+  }
+  if (settings.memoryMagic != MEMORY_MAGIC) {
+    initializeMemorySlots();
+    settingsChanged = true;
+  } else {
+    for (int i = 0; i < MEMORY_SLOT_COUNT; i++) {
+      settings.memoryNames[i][MEMORY_NAME_LENGTH - 1] = '\0';
+      if (settings.memoryNames[i][0] == '\0') {
+        String defaultName = String("器材 ") + (i + 1);
+        defaultName.toCharArray(settings.memoryNames[i], MEMORY_NAME_LENGTH);
+        settingsChanged = true;
+      } else {
+        String oldDefaultName = String("Equipment ") + (i + 1);
+        if (strcmp(settings.memoryNames[i], oldDefaultName.c_str()) == 0) {
+          String defaultName = String("器材 ") + (i + 1);
+          defaultName.toCharArray(settings.memoryNames[i], MEMORY_NAME_LENGTH);
+          settingsChanged = true;
+        }
+      }
+      if (settings.memoryValid[i]
+          && (settings.memoryPositions[i] < 0 || settings.memoryPositions[i] > settings.maxSteps)) {
+        settings.memoryValid[i] = false;
+        settingsChanged = true;
+      }
+    }
+  }
+  if (settingsChanged) {
+    EEPROM.put(0, settings);
+    EEPROM.commit();
   }
 }
 
@@ -366,6 +470,43 @@ String statusResponse() {
 
 String ipToString(const IPAddress &ip) {
   return String(ip[0]) + "." + String(ip[1]) + "." + String(ip[2]) + "." + String(ip[3]);
+}
+
+String jsonEscape(const String &value) {
+  String escaped;
+  escaped.reserve(value.length() + 8);
+  for (size_t i = 0; i < value.length(); i++) {
+    char c = value.charAt(i);
+    if (c == '"' || c == '\\') {
+      escaped += '\\';
+      escaped += c;
+    } else if (c == '\n') {
+      escaped += "\\n";
+    } else if (c == '\r') {
+      escaped += "\\r";
+    } else {
+      escaped += c;
+    }
+  }
+  return escaped;
+}
+
+String memoriesJson() {
+  String json = "{\"memories\":[";
+  for (int i = 0; i < MEMORY_SLOT_COUNT; i++) {
+    if (i > 0) json += ",";
+    json += "{\"slot\":";
+    json += i;
+    json += ",\"name\":\"";
+    json += jsonEscape(settings.memoryNames[i]);
+    json += "\",\"position\":";
+    json += settings.memoryPositions[i];
+    json += ",\"valid\":";
+    json += boolText(settings.memoryValid[i]);
+    json += "}";
+  }
+  json += "]}";
+  return json;
 }
 
 String statusJson() {
@@ -673,6 +814,24 @@ void handleSettingsPostApi() {
   double numberValue;
   bool boolValue;
 
+  if (extractNumber(body, "maxSteps", numberValue)) {
+    long newMaxSteps = lround(numberValue);
+    if (newMaxSteps <= 0) {
+      sendJson(400, "{\"error\":\"invalid_max_steps\"}");
+      return;
+    }
+    if (newMaxSteps < stepper.currentPosition() || newMaxSteps < stepper.targetPosition()) {
+      sendJson(409, "{\"error\":\"max_steps_below_position_or_target\"}");
+      return;
+    }
+    settings.maxSteps = newMaxSteps;
+    clampHomeOffset();
+    for (int i = 0; i < MEMORY_SLOT_COUNT; i++) {
+      if (settings.memoryValid[i] && settings.memoryPositions[i] > settings.maxSteps) {
+        settings.memoryValid[i] = false;
+      }
+    }
+  }
   if (extractNumber(body, "stepsPerRev", numberValue) && numberValue > 0) {
     settings.stepsPerRev = (int)numberValue;
   }
@@ -726,6 +885,63 @@ void handleSettingsPostApi() {
   sendJson(200, statusJson());
 }
 
+void handleMemoriesGetApi() {
+  sendJson(200, memoriesJson());
+}
+
+void handleMemoriesPostApi() {
+  String body = server.arg("plain");
+  double slotValue;
+  if (!extractNumber(body, "slot", slotValue)) {
+    sendJson(400, "{\"error\":\"invalid_slot\"}");
+    return;
+  }
+
+  int slot = (int)slotValue;
+  if (slot < 0 || slot >= MEMORY_SLOT_COUNT || slotValue != slot) {
+    sendJson(400, "{\"error\":\"invalid_slot\"}");
+    return;
+  }
+
+  char action[12] = "";
+  if (!extractString(body, "action", action, sizeof(action))) {
+    sendJson(400, "{\"error\":\"invalid_action\"}");
+    return;
+  }
+
+  if (strcmp(action, "save") == 0) {
+    char name[MEMORY_NAME_LENGTH] = "";
+    if (extractString(body, "name", name, sizeof(name)) && name[0] != '\0') {
+      strncpy(settings.memoryNames[slot], name, MEMORY_NAME_LENGTH);
+      settings.memoryNames[slot][MEMORY_NAME_LENGTH - 1] = '\0';
+    }
+    long position = physicalToLogicalSteps(stepper.currentPosition());
+    if (position < 0) position = 0;
+    if (position > settings.maxSteps) position = settings.maxSteps;
+    settings.memoryPositions[slot] = position;
+    settings.memoryValid[slot] = true;
+    saveSettings();
+    sendJson(200, memoriesJson());
+    return;
+  }
+
+  if (strcmp(action, "move") == 0) {
+    if (!settings.memoryValid[slot]) {
+      sendJson(409, "{\"error\":\"memory_not_saved\"}");
+      return;
+    }
+    if (!moveToLogicalSteps(settings.memoryPositions[slot])) {
+      sendJson(409, "{\"error\":\"memory_out_of_range\"}");
+      return;
+    }
+    broadcastStatus();
+    sendJson(200, memoriesJson());
+    return;
+  }
+
+  sendJson(400, "{\"error\":\"invalid_action\"}");
+}
+
 void handleOptions() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -742,6 +958,8 @@ void setupHttp() {
   server.on("/api/set-position", HTTP_POST, handleSetPositionApi);
   server.on("/api/settings", HTTP_GET, handleSettingsGetApi);
   server.on("/api/settings", HTTP_POST, handleSettingsPostApi);
+  server.on("/api/memories", HTTP_GET, handleMemoriesGetApi);
+  server.on("/api/memories", HTTP_POST, handleMemoriesPostApi);
   server.onNotFound([]() {
     if (server.method() == HTTP_OPTIONS) {
       handleOptions();
