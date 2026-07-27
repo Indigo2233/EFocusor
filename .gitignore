@@ -1,9 +1,13 @@
 ﻿# Build outputs
 **/bin/
 **/obj/
+dist/
 
 # Arduino build
 *.bin
+*.elf
+*.hex
+*.map
 
 # VS
 .vs/

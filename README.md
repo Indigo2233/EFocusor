@@ -94,3 +94,18 @@ All commands are `#`-terminated:
 ### ASCOM Driver
 - Visual Studio with .NET Framework 4.8
 - ASCOM Platform 6 Developer Components
+
+## ASCOM Driver Installer
+
+Build the distributable Windows installer from PowerShell:
+
+```powershell
+.\installer\Build-Installer.ps1
+```
+
+The build requires Visual Studio Build Tools, ASCOM Platform Developer Components,
+and Inno Setup 6. The generated file is `dist\EFucoserASCOMSetup.exe`.
+
+The installer requires administrator privileges and ASCOM Platform 6 or later. It
+registers the driver for 32-bit and 64-bit ASCOM clients and removes both
+registrations during uninstall.
