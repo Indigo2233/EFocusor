@@ -1,6 +1,6 @@
 /*
-    INDI driver for EFucoser
-    Copyright (C) 2026 EFucoser contributors
+    INDI driver for IKunFocuser
+    Copyright (C) 2026 IKunFocuser contributors
     SPDX-License-Identifier: LGPL-2.1-or-later
 
     This library is free software; you can redistribute it and/or
@@ -16,17 +16,17 @@
 
 #pragma once
 
-#include "efucoser_protocol.h"
+#include "ikunfocuser_protocol.h"
 #include "indifocuser.h"
 
 #include <cstddef>
 #include <cstdint>
 
-class EFucoser : public INDI::Focuser
+class IKunFocuser : public INDI::Focuser
 {
     public:
-        EFucoser();
-        ~EFucoser() override = default;
+        IKunFocuser();
+        ~IKunFocuser() override = default;
 
         const char *getDefaultName() override;
         bool initProperties() override;
@@ -59,12 +59,12 @@ class EFucoser : public INDI::Focuser
         };
 
         bool sendCommand(const char *command, char *response, std::size_t responseSize, bool silent = false);
-        bool readMotionStatus(EFucoserProtocol::MotionStatus &status, bool silent = false);
+        bool readMotionStatus(IKunFocuserProtocol::MotionStatus &status, bool silent = false);
         bool readFullState();
         bool setAcceleration(uint32_t acceleration);
         bool setHold(bool enabled);
         void applyMaximumPosition(uint32_t maximum);
-        void applyMotionStatus(const EFucoserProtocol::MotionStatus &status);
+        void applyMotionStatus(const IKunFocuserProtocol::MotionStatus &status);
         void markMotionAlert();
 
         INDI::PropertyNumber AccelerationNP { 1 };

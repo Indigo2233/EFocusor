@@ -6,7 +6,7 @@
 - [x] Serial and TCP connection plugins
 - [x] No external runtime dependency beyond INDI core
 - [x] LGPL-2.1-or-later source headers
-- [x] INDI executable name fixed as `indi_efucoser_focuser`
+- [x] INDI executable name fixed as `indi_ikun_focuser`
 - [x] Driver XML metadata prepared
 - [x] INDI core CMake and `drivers.xml` staging tool prepared
 - [x] Protocol parser unit tests

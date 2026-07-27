@@ -18,7 +18,7 @@
 #define CCW_PIN 0     // D3 (GPIO0) - NOT D0/GPIO16 (no internal pull-up!)
 #define TEMP_PIN 2    // D4, DS18B20 DATA with 4.7k pull-up to 3.3V
 
-#define DEVICE_RESPONSE "EFucoser ESP8266 Focuser ver 1005"
+#define DEVICE_RESPONSE "IKunFocuser ESP8266 Focuser ver 1005"
 #define FIRMWARE_VERSION 1005
 #define EEPROM_SIZE 512
 #define SETTINGS_MAGIC 0xEF0C115EUL
@@ -100,7 +100,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>EFucoser 电子调焦器</title>
+<title>IKun Focuser 电子调焦器</title>
 <style>
 :root{color-scheme:dark;--bg:#111318;--panel:#1a1f28;--panel2:#202734;--line:#384252;--text:#f2f5f8;--muted:#aeb8c6;--accent:#4db6ac;--warn:#f4b24e;--danger:#ee6b63;--ok:#7bc96f}
 body.red{--accent:#cc4444;--ok:#bb3333;--warn:#d4883a;--danger:#881111;--muted:#996666;--text:#eecccc;--panel2:#2a1a1a;--line:#4a3030}
@@ -145,7 +145,7 @@ input{width:100%;background:#121720;color:var(--text);border:1px solid var(--lin
 <body>
 <main>
 <header>
-<h1>EFucoser 电子调焦器</h1>
+<h1>IKun Focuser 电子调焦器</h1>
 <button class="night" id="nightToggle" title="夜视红光模式">🌙</button>
 <div class="status" id="link">连接中</div>
 </header>

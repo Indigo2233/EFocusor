@@ -1,6 +1,6 @@
 /*
-    INDI driver for EFucoser
-    Copyright (C) 2026 EFucoser contributors
+    INDI driver for IKunFocuser
+    Copyright (C) 2026 IKunFocuser contributors
     SPDX-License-Identifier: LGPL-2.1-or-later
 
     This library is free software; you can redistribute it and/or
@@ -14,7 +14,7 @@
     Lesser General Public License for more details.
 */
 
-#include "efucoser.h"
+#include "ikunfocuser.h"
 
 #include "connectionplugins/connectionserial.h"
 #include "connectionplugins/connectiontcp.h"
@@ -29,9 +29,9 @@
 #include <termios.h>
 #include <unistd.h>
 
-static std::unique_ptr<EFucoser> efucoser(new EFucoser());
+static std::unique_ptr<IKunFocuser> ikunFocuser(new IKunFocuser());
 
-EFucoser::EFucoser()
+IKunFocuser::IKunFocuser()
 {
     setVersion(1, 0);
     setSupportedConnections(CONNECTION_SERIAL | CONNECTION_TCP);
@@ -39,12 +39,12 @@ EFucoser::EFucoser()
                       FOCUSER_CAN_SYNC | FOCUSER_CAN_REVERSE | FOCUSER_HAS_VARIABLE_SPEED);
 }
 
-const char *EFucoser::getDefaultName()
+const char *IKunFocuser::getDefaultName()
 {
-    return "EFucoser Focuser";
+    return "IKun Focuser";
 }
 
-bool EFucoser::initProperties()
+bool IKunFocuser::initProperties()
 {
     INDI::Focuser::initProperties();
 
@@ -81,7 +81,7 @@ bool EFucoser::initProperties()
     return true;
 }
 
-bool EFucoser::updateProperties()
+bool IKunFocuser::updateProperties()
 {
     INDI::Focuser::updateProperties();
 
@@ -102,11 +102,11 @@ bool EFucoser::updateProperties()
             HoldSP.apply();
             TemperatureNP.apply();
             FirmwareTP.apply();
-            LOG_INFO("EFucoser parameters updated; focuser is ready.");
+            LOG_INFO("IKunFocuser parameters updated; focuser is ready.");
         }
         else
         {
-            LOG_WARN("Connected to EFucoser, but one or more startup values could not be read.");
+            LOG_WARN("Connected to IKunFocuser, but one or more startup values could not be read.");
         }
     }
     else
@@ -120,7 +120,7 @@ bool EFucoser::updateProperties()
     return true;
 }
 
-bool EFucoser::Handshake()
+bool IKunFocuser::Handshake()
 {
     if (getActiveConnection()->type() == Connection::Interface::CONNECTION_SERIAL)
     {
@@ -130,9 +130,10 @@ bool EFucoser::Handshake()
     }
 
     char response[RESPONSE_SIZE] = { 0 };
-    if (!sendCommand("#", response, sizeof(response), true) || std::strstr(response, "EFucoser") == nullptr)
+    if (!sendCommand("#", response, sizeof(response), true) ||
+            !IKunFocuserProtocol::isSupportedIdentity(response))
     {
-        LOG_ERROR("EFucoser identification failed. Check the selected port, power, and firmware.");
+        LOG_ERROR("IKunFocuser identification failed. Check the selected port, power, and firmware.");
         return false;
     }
 
@@ -140,20 +141,21 @@ bool EFucoser::Handshake()
     std::snprintf(identity, sizeof(identity), "%s", response);
 
     if (!sendCommand("V#", response, sizeof(response), true) ||
-        !EFucoserProtocol::parseVersion(response, m_FirmwareVersion))
+            !IKunFocuserProtocol::parseVersion(response, m_FirmwareVersion))
     {
-        LOG_ERROR("EFucoser firmware version query failed.");
+        LOG_ERROR("IKunFocuser firmware version query failed.");
         return false;
     }
 
     char versionText[16] = { 0 };
     std::snprintf(versionText, sizeof(versionText), "%d", m_FirmwareVersion);
     FirmwareTP[FIRMWARE_VERSION].setText(versionText);
-    FirmwareTP[CONTROLLER_MODEL].setText(EFucoserProtocol::modelForVersion(m_FirmwareVersion));
+    FirmwareTP[CONTROLLER_MODEL].setText(IKunFocuserProtocol::modelForVersion(m_FirmwareVersion));
 
-    if (!EFucoserProtocol::isSupportedVersion(m_FirmwareVersion))
+    if (!IKunFocuserProtocol::isSupportedVersion(m_FirmwareVersion))
     {
-        LOGF_ERROR("Firmware %d is outside the supported release range. Upgrade the EFucoser firmware.", m_FirmwareVersion);
+        LOGF_ERROR("Firmware %d is outside the supported release range. Upgrade the IKunFocuser firmware.",
+                   m_FirmwareVersion);
         return false;
     }
 
@@ -161,7 +163,7 @@ bool EFucoser::Handshake()
     return true;
 }
 
-bool EFucoser::sendCommand(const char *command, char *response, std::size_t responseSize, bool silent)
+bool IKunFocuser::sendCommand(const char *command, char *response, std::size_t responseSize, bool silent)
 {
     if (response == nullptr || responseSize < 2)
         return false;
@@ -179,7 +181,7 @@ bool EFucoser::sendCommand(const char *command, char *response, std::size_t resp
         {
             char errorMessage[MAXRBUF] = { 0 };
             tty_error_msg(rc, errorMessage, MAXRBUF);
-            LOGF_ERROR("EFucoser write failed: %s.", errorMessage);
+            LOGF_ERROR("IKunFocuser write failed: %s.", errorMessage);
         }
         return false;
     }
@@ -193,7 +195,7 @@ bool EFucoser::sendCommand(const char *command, char *response, std::size_t resp
         {
             char errorMessage[MAXRBUF] = { 0 };
             tty_error_msg(rc, errorMessage, MAXRBUF);
-            LOGF_ERROR("EFucoser read failed: %s.", errorMessage);
+            LOGF_ERROR("IKunFocuser read failed: %s.", errorMessage);
         }
         return false;
     }
@@ -201,33 +203,33 @@ bool EFucoser::sendCommand(const char *command, char *response, std::size_t resp
     response[bytesRead] = '\0';
     LOGF_DEBUG("RES <%s>", response);
 
-    if (EFucoserProtocol::isErrorResponse(response))
+    if (IKunFocuserProtocol::isErrorResponse(response))
     {
         if (!silent)
-            LOGF_ERROR("EFucoser rejected command <%s> with response <%s>.", command, response);
+            LOGF_ERROR("IKunFocuser rejected command <%s> with response <%s>.", command, response);
         return false;
     }
 
     return true;
 }
 
-bool EFucoser::readMotionStatus(EFucoserProtocol::MotionStatus &status, bool silent)
+bool IKunFocuser::readMotionStatus(IKunFocuserProtocol::MotionStatus &status, bool silent)
 {
     char response[RESPONSE_SIZE] = { 0 };
     if (!sendCommand("G#", response, sizeof(response), silent))
         return false;
 
-    if (!EFucoserProtocol::parseMotionStatus(response, status))
+    if (!IKunFocuserProtocol::parseMotionStatus(response, status))
     {
         if (!silent)
-            LOGF_ERROR("Invalid EFucoser status response <%s>.", response);
+            LOGF_ERROR("Invalid IKunFocuser status response <%s>.", response);
         return false;
     }
 
     return true;
 }
 
-void EFucoser::applyMaximumPosition(uint32_t maximum)
+void IKunFocuser::applyMaximumPosition(uint32_t maximum)
 {
     FocusMaxPosNP[0].setValue(maximum);
 
@@ -249,7 +251,7 @@ void EFucoser::applyMaximumPosition(uint32_t maximum)
     SyncPresets(maximum);
 }
 
-bool EFucoser::readFullState()
+bool IKunFocuser::readFullState()
 {
     char response[RESPONSE_SIZE] = { 0 };
     if (!sendCommand("I#", response, sizeof(response)))
@@ -261,35 +263,35 @@ bool EFucoser::readFullState()
     double numberValue = 0;
     bool booleanValue = false;
 
-    if (EFucoserProtocol::parseJsonInteger(json, "maxSteps", integerValue) &&
-        integerValue >= 100 && integerValue <= 9999999)
+    if (IKunFocuserProtocol::parseJsonInteger(json, "maxSteps", integerValue) &&
+            integerValue >= 100 && integerValue <= 9999999)
     {
         applyMaximumPosition(static_cast<uint32_t>(integerValue));
         foundAny = true;
     }
 
-    if (EFucoserProtocol::parseJsonInteger(json, "positionSteps", integerValue) && integerValue >= 0)
+    if (IKunFocuserProtocol::parseJsonInteger(json, "positionSteps", integerValue) && integerValue >= 0)
     {
         FocusAbsPosNP[0].setValue(integerValue);
         m_LastPosition = static_cast<uint32_t>(integerValue);
         foundAny = true;
     }
 
-    if (EFucoserProtocol::parseJsonInteger(json, "maxSpeed", integerValue) &&
-        integerValue >= 1 && integerValue <= 2000)
+    if (IKunFocuserProtocol::parseJsonInteger(json, "maxSpeed", integerValue) &&
+            integerValue >= 1 && integerValue <= 2000)
     {
         FocusSpeedNP[0].setValue(integerValue);
         foundAny = true;
     }
 
-    if (EFucoserProtocol::parseJsonInteger(json, "acceleration", integerValue) &&
-        integerValue >= 1 && integerValue <= 10000)
+    if (IKunFocuserProtocol::parseJsonInteger(json, "acceleration", integerValue) &&
+            integerValue >= 1 && integerValue <= 10000)
     {
         AccelerationNP[0].setValue(integerValue);
         foundAny = true;
     }
 
-    if (EFucoserProtocol::parseJsonBoolean(json, "reversed", booleanValue))
+    if (IKunFocuserProtocol::parseJsonBoolean(json, "reversed", booleanValue))
     {
         FocusReverseSP.reset();
         FocusReverseSP[INDI_ENABLED].setState(booleanValue ? ISS_ON : ISS_OFF);
@@ -297,7 +299,7 @@ bool EFucoser::readFullState()
         foundAny = true;
     }
 
-    if (EFucoserProtocol::parseJsonBoolean(json, "hold", booleanValue))
+    if (IKunFocuserProtocol::parseJsonBoolean(json, "hold", booleanValue))
     {
         HoldSP.reset();
         HoldSP[HOLD_ON].setState(booleanValue ? ISS_ON : ISS_OFF);
@@ -305,14 +307,14 @@ bool EFucoser::readFullState()
         foundAny = true;
     }
 
-    if (EFucoserProtocol::parseJsonNumber(json, "lastTemp", numberValue) &&
-        numberValue >= -55 && numberValue <= 125)
+    if (IKunFocuserProtocol::parseJsonNumber(json, "lastTemp", numberValue) &&
+            numberValue >= -55 && numberValue <= 125)
     {
         TemperatureNP[0].setValue(numberValue);
         foundAny = true;
     }
 
-    if (EFucoserProtocol::parseJsonBoolean(json, "tempSensorPresent", booleanValue))
+    if (IKunFocuserProtocol::parseJsonBoolean(json, "tempSensorPresent", booleanValue))
     {
         TemperatureNP.setState(booleanValue ? IPS_OK : IPS_IDLE);
         foundAny = true;
@@ -321,7 +323,7 @@ bool EFucoser::readFullState()
     return foundAny;
 }
 
-void EFucoser::applyMotionStatus(const EFucoserProtocol::MotionStatus &status)
+void IKunFocuser::applyMotionStatus(const IKunFocuserProtocol::MotionStatus &status)
 {
     const auto position = static_cast<uint32_t>(status.position);
     if (position != m_LastPosition)
@@ -347,12 +349,12 @@ void EFucoser::applyMotionStatus(const EFucoserProtocol::MotionStatus &status)
             FocusRelPosNP.setState(IPS_OK);
             FocusAbsPosNP.apply();
             FocusRelPosNP.apply();
-            LOG_INFO("EFucoser reached the requested position.");
+            LOG_INFO("IKunFocuser reached the requested position.");
         }
     }
 }
 
-IPState EFucoser::MoveAbsFocuser(uint32_t targetTicks)
+IPState IKunFocuser::MoveAbsFocuser(uint32_t targetTicks)
 {
     char command[64] = { 0 };
     char response[RESPONSE_SIZE] = { 0 };
@@ -361,15 +363,15 @@ IPState EFucoser::MoveAbsFocuser(uint32_t targetTicks)
     if (!sendCommand(command, response, sizeof(response)))
         return IPS_ALERT;
 
-    EFucoserProtocol::MotionStatus status;
-    if (!EFucoserProtocol::parseMotionStatus(response, status))
+    IKunFocuserProtocol::MotionStatus status;
+    if (!IKunFocuserProtocol::parseMotionStatus(response, status))
         return IPS_ALERT;
 
     m_CommunicationFailures = 0;
     return status.moving ? IPS_BUSY : IPS_OK;
 }
 
-IPState EFucoser::MoveRelFocuser(FocusDirection direction, uint32_t ticks)
+IPState IKunFocuser::MoveRelFocuser(FocusDirection direction, uint32_t ticks)
 {
     const uint32_t current = static_cast<uint32_t>(FocusAbsPosNP[0].getValue());
     const uint32_t maximum = static_cast<uint32_t>(FocusMaxPosNP[0].getValue());
@@ -383,13 +385,13 @@ IPState EFucoser::MoveRelFocuser(FocusDirection direction, uint32_t ticks)
     return MoveAbsFocuser(target);
 }
 
-bool EFucoser::AbortFocuser()
+bool IKunFocuser::AbortFocuser()
 {
     char response[RESPONSE_SIZE] = { 0 };
     return sendCommand("S#", response, sizeof(response));
 }
 
-bool EFucoser::SyncFocuser(uint32_t ticks)
+bool IKunFocuser::SyncFocuser(uint32_t ticks)
 {
     char command[64] = { 0 };
     char response[RESPONSE_SIZE] = { 0 };
@@ -397,13 +399,13 @@ bool EFucoser::SyncFocuser(uint32_t ticks)
     return sendCommand(command, response, sizeof(response));
 }
 
-bool EFucoser::ReverseFocuser(bool enabled)
+bool IKunFocuser::ReverseFocuser(bool enabled)
 {
     char response[RESPONSE_SIZE] = { 0 };
     return sendCommand(enabled ? "R 1#" : "R 0#", response, sizeof(response));
 }
 
-bool EFucoser::SetFocuserMaxPosition(uint32_t ticks)
+bool IKunFocuser::SetFocuserMaxPosition(uint32_t ticks)
 {
     char command[64] = { 0 };
     char response[RESPONSE_SIZE] = { 0 };
@@ -415,7 +417,7 @@ bool EFucoser::SetFocuserMaxPosition(uint32_t ticks)
     return true;
 }
 
-bool EFucoser::SetFocuserSpeed(int speed)
+bool IKunFocuser::SetFocuserSpeed(int speed)
 {
     char command[64] = { 0 };
     char response[RESPONSE_SIZE] = { 0 };
@@ -423,7 +425,7 @@ bool EFucoser::SetFocuserSpeed(int speed)
     return sendCommand(command, response, sizeof(response));
 }
 
-bool EFucoser::setAcceleration(uint32_t acceleration)
+bool IKunFocuser::setAcceleration(uint32_t acceleration)
 {
     char command[64] = { 0 };
     char response[RESPONSE_SIZE] = { 0 };
@@ -431,13 +433,13 @@ bool EFucoser::setAcceleration(uint32_t acceleration)
     return sendCommand(command, response, sizeof(response));
 }
 
-bool EFucoser::setHold(bool enabled)
+bool IKunFocuser::setHold(bool enabled)
 {
     char response[RESPONSE_SIZE] = { 0 };
     return sendCommand(enabled ? "C 1#" : "C 0#", response, sizeof(response));
 }
 
-bool EFucoser::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
+bool IKunFocuser::ISNewNumber(const char *dev, const char *name, double values[], char *names[], int n)
 {
     if (dev != nullptr && std::strcmp(dev, getDeviceName()) == 0 && AccelerationNP.isNameMatch(name))
     {
@@ -460,7 +462,7 @@ bool EFucoser::ISNewNumber(const char *dev, const char *name, double values[], c
     return INDI::Focuser::ISNewNumber(dev, name, values, names, n);
 }
 
-bool EFucoser::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
+bool IKunFocuser::ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int n)
 {
     if (dev != nullptr && std::strcmp(dev, getDeviceName()) == 0 && HoldSP.isNameMatch(name))
     {
@@ -484,7 +486,7 @@ bool EFucoser::ISNewSwitch(const char *dev, const char *name, ISState *states, c
     return INDI::Focuser::ISNewSwitch(dev, name, states, names, n);
 }
 
-void EFucoser::markMotionAlert()
+void IKunFocuser::markMotionAlert()
 {
     if (FocusAbsPosNP.getState() == IPS_BUSY || FocusRelPosNP.getState() == IPS_BUSY)
     {
@@ -495,12 +497,12 @@ void EFucoser::markMotionAlert()
     }
 }
 
-void EFucoser::TimerHit()
+void IKunFocuser::TimerHit()
 {
     if (!isConnected())
         return;
 
-    EFucoserProtocol::MotionStatus status;
+    IKunFocuserProtocol::MotionStatus status;
     if (readMotionStatus(status, true))
     {
         m_CommunicationFailures = 0;
@@ -510,7 +512,7 @@ void EFucoser::TimerHit()
     {
         markMotionAlert();
         m_CommunicationFailures = 0;
-        LOG_ERROR("Lost communication with EFucoser while polling status.");
+        LOG_ERROR("Lost communication with IKunFocuser while polling status.");
     }
 
     if (++m_TemperaturePollCounter >= 10)
@@ -533,7 +535,7 @@ void EFucoser::TimerHit()
             if (AccelerationNP[0].getValue() != previousAcceleration)
                 AccelerationNP.apply();
             if (TemperatureNP[0].getValue() != previousTemperature ||
-                TemperatureNP.getState() != previousTemperatureState)
+                    TemperatureNP.getState() != previousTemperatureState)
                 TemperatureNP.apply();
             if (FocusReverseSP.findOnSwitchIndex() != previousReverse)
                 FocusReverseSP.apply();

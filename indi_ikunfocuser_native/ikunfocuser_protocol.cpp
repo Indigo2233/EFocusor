@@ -1,6 +1,6 @@
 /*
-    EFucoser protocol helpers
-    Copyright (C) 2026 EFucoser contributors
+    IKunFocuser protocol helpers
+    Copyright (C) 2026 IKunFocuser contributors
     SPDX-License-Identifier: LGPL-2.1-or-later
 
     This library is free software; you can redistribute it and/or
@@ -9,7 +9,7 @@
     version 2.1 of the License, or (at your option) any later version.
 */
 
-#include "efucoser_protocol.h"
+#include "ikunfocuser_protocol.h"
 
 #include <cerrno>
 #include <cstdlib>
@@ -34,7 +34,7 @@ bool findJsonValue(const std::string &json, const std::string &key, std::size_t 
 
 } // namespace
 
-namespace EFucoserProtocol
+namespace IKunFocuserProtocol
 {
 
 bool parseMotionStatus(const std::string &response, MotionStatus &status)
@@ -138,6 +138,12 @@ bool isErrorResponse(const std::string &response)
     return response.find("ERR:") != std::string::npos;
 }
 
+bool isSupportedIdentity(const std::string &response)
+{
+    return response.find("IKunFocuser") != std::string::npos ||
+           response.find("EFucoser") != std::string::npos;
+}
+
 const char *modelForVersion(int version)
 {
     if (version >= 1200 && version < 1300)
@@ -146,7 +152,7 @@ const char *modelForVersion(int version)
         return "ESP8266 ULN2003";
     if (version >= 1000 && version < 1100)
         return "ESP8266 STEP/DIR";
-    return "EFucoser";
+    return "IKunFocuser";
 }
 
 bool isSupportedVersion(int version)
@@ -156,4 +162,4 @@ bool isSupportedVersion(int version)
            (version >= 1005 && version < 1100);
 }
 
-} // namespace EFucoserProtocol
+} // namespace IKunFocuserProtocol

@@ -41,11 +41,11 @@ foreach ($directory in $includeDirectories) {
     $arguments += "-I$directory"
 }
 
-$arguments += (Join-Path $sourceRoot "efucoser.cpp")
+$arguments += (Join-Path $sourceRoot "ikunfocuser.cpp")
 
 & $compiler @arguments
 if ($LASTEXITCODE -ne 0) {
-    throw "EFucoser syntax check failed with exit code $LASTEXITCODE."
+    throw "IKunFocuser syntax check failed with exit code $LASTEXITCODE."
 }
 
-Write-Host "EFucoser passed the current INDI header syntax check."
+Write-Host "IKunFocuser passed the current INDI header syntax check."

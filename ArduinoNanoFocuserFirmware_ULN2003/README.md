@@ -1,4 +1,4 @@
-# EFucoser Arduino Nano ULN2003 Firmware
+# IKunFocuser Arduino Nano ULN2003 Firmware
 
 This firmware is for an Arduino Nano connected over USB serial to the ASCOM
 driver. It drives a 35BYJ46 12V geared stepper motor through a ULN2003 board and

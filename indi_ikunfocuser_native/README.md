@@ -1,6 +1,6 @@
-# EFucoser native INDI driver
+# IKunFocuser native INDI driver
 
-Native C++ INDI focuser driver for EFucoser controllers. The driver is prepared
+Native C++ INDI focuser driver for IKunFocuser controllers. The driver is prepared
 for submission to the INDI core repository and has no dependencies beyond
 libindi and the C++ standard library.
 
@@ -41,7 +41,7 @@ sudo cmake --install build
 Start the driver with:
 
 ```bash
-indiserver -vv indi_efucoser_focuser
+indiserver -vv indi_ikun_focuser
 ```
 
 ## INDI core submission
@@ -53,7 +53,7 @@ required build and discovery entries:
 python tools/stage_indi_core.py /path/to/indi
 ```
 
-Review the resulting INDI diff and build the `indi_efucoser_focuser` target.
+Review the resulting INDI diff and build the `indi_ikun_focuser` target.
 See [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md) for the complete release
 gate.
 

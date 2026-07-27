@@ -1,6 +1,6 @@
 /*
-    EFucoser protocol helpers
-    Copyright (C) 2026 EFucoser contributors
+    IKunFocuser protocol helpers
+    Copyright (C) 2026 IKunFocuser contributors
     SPDX-License-Identifier: LGPL-2.1-or-later
 
     This library is free software; you can redistribute it and/or
@@ -19,7 +19,7 @@
 #include <cstdint>
 #include <string>
 
-namespace EFucoserProtocol
+namespace IKunFocuserProtocol
 {
 
 struct MotionStatus
@@ -34,7 +34,8 @@ bool parseJsonInteger(const std::string &json, const std::string &key, int64_t &
 bool parseJsonNumber(const std::string &json, const std::string &key, double &value);
 bool parseJsonBoolean(const std::string &json, const std::string &key, bool &value);
 bool isErrorResponse(const std::string &response);
+bool isSupportedIdentity(const std::string &response);
 const char *modelForVersion(int version);
 bool isSupportedVersion(int version);
 
-} // namespace EFucoserProtocol
+} // namespace IKunFocuserProtocol

@@ -1,9 +1,9 @@
-# Add EFucoser focuser driver
+# Add IKunFocuser driver
 
 ## Summary
 
-This change adds a native INDI driver for the EFucoser electronic focuser.
-EFucoser is an open hardware controller supporting Arduino Nano and ESP8266
+This change adds a native INDI driver for the IKunFocuser electronic focuser.
+IKunFocuser is an open hardware controller supporting Arduino Nano and ESP8266
 boards with STEP/DIR or ULN2003 motor interfaces.
 
 ## Supported hardware

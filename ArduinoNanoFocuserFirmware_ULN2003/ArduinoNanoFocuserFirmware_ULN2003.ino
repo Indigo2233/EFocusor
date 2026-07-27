@@ -12,7 +12,7 @@
 #define IN3_PIN 10    // ULN2003 IN3
 #define IN4_PIN 11    // ULN2003 IN4
 
-#define DEVICE_RESPONSE "EFucoser Arduino Nano ULN2003 Focuser ver 1201"
+#define DEVICE_RESPONSE "IKunFocuser Arduino Nano ULN2003 Focuser ver 1201"
 #define FIRMWARE_VERSION 1201
 #define SETTINGS_MAGIC 0xEF0C1201UL
 

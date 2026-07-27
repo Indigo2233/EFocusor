@@ -26,7 +26,7 @@ focuser use with linear position control.
   - ASCOM focuser driver source. Public ASCOM identity: `ASCOM.EFucoser.Focuser`.
 - `driver/FocuserTest/`
   - Simple Windows Forms ASCOM test client.
-- `indi_efocuser_native/`
+- `indi_ikunfocuser_native/`
   - Native C++ INDI focuser driver, protocol tests, upstream staging tool, and
     submission documentation.
 - `AGENTS.md`

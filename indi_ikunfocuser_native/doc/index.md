@@ -1,9 +1,9 @@
-# EFucoser Focuser
+# IKun Focuser
 
 ## Metadata
 
-- Driver name: EFucoser Focuser
-- Executable: `indi_efucoser_focuser`
+- Driver name: IKun Focuser
+- Executable: `indi_ikun_focuser`
 - Device type: Focuser
 - Version: 1.0
 - License: LGPL-2.1-or-later
@@ -12,7 +12,7 @@
 
 ## Overview
 
-EFucoser is an open hardware electronic focuser controller. The INDI driver
+IKunFocuser is an open hardware electronic focuser controller. The INDI driver
 supports the following controller and motor-interface combinations:
 
 | Controller | Minimum firmware | Connection |
@@ -32,14 +32,14 @@ drivers using the package manager for the operating system. Start the driver
 directly for diagnostic use:
 
 ```bash
-indiserver -vv indi_efucoser_focuser
+indiserver -vv indi_ikun_focuser
 ```
 
 ## Hardware connection
 
 ### USB serial
 
-1. Flash a supported EFucoser firmware.
+1. Flash a supported IKunFocuser firmware.
 2. Connect the controller with a USB data cable.
 3. Ensure the user running `indiserver` has access to the serial device.
 4. Select the controller port in the Connection tab.
@@ -47,11 +47,12 @@ indiserver -vv indi_efucoser_focuser
 
 Common port names are `/dev/ttyUSB0` for CH340/FTDI bridges and
 `/dev/ttyACM0` for USB CDC devices. USB bridge VID/PID values are shared by
-many products, so the driver verifies the EFucoser identity during handshake.
+many products, so the driver verifies the IKunFocuser identity during handshake.
+Firmware versions using the legacy `EFucoser` identity remain supported.
 
 ### ESP8266 TCP
 
-1. Connect the INDI host to the EFucoser access point or place both systems on
+1. Connect the INDI host to the IKunFocuser access point or place both systems on
    the same configured Wi-Fi network.
 2. Select TCP in the Connection tab.
 3. Enter the controller address. The access-point default is `192.168.4.1`.
@@ -81,8 +82,8 @@ hold improves position retention and increases motor and driver temperature.
 
 ## Ekos use
 
-1. Add `EFucoser Focuser` to an Ekos equipment profile.
-2. Start INDI and open the EFucoser control panel.
+1. Add `IKun Focuser` to an Ekos equipment profile.
+2. Start INDI and open the IKun Focuser control panel.
 3. Select Serial or TCP and connect.
 4. Configure maximum travel, speed, acceleration, reverse, and hold.
 5. Verify inward and outward movement with small step counts.
@@ -97,7 +98,7 @@ hold improves position retention and increases motor and driver temperature.
 - Confirm firmware meets the minimum version.
 - Use a USB cable that supports data.
 - Check membership in the Linux `dialout` group.
-- Run `indiserver -vv indi_efucoser_focuser` and inspect the handshake log.
+- Run `indiserver -vv indi_ikun_focuser` and inspect the handshake log.
 
 ### Motor does not move
 

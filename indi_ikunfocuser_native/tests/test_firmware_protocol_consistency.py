@@ -33,6 +33,15 @@ class FirmwareProtocolConsistencyTests(unittest.TestCase):
                 self.assertIsNotNone(match)
                 self.assertEqual(int(match.group(1)), expected_version)
 
+    def test_device_identity(self):
+        for name, (path, _) in FIRMWARE.items():
+            source = path.read_text(encoding="utf-8")
+            with self.subTest(controller=name):
+                self.assertRegex(
+                    source,
+                    r'#define DEVICE_RESPONSE "IKunFocuser .+ Focuser ver \d+"',
+                )
+
     def test_required_commands_exist(self):
         commands = "GPMHSRCVIDTEXA"
         for name, (path, _) in FIRMWARE.items():

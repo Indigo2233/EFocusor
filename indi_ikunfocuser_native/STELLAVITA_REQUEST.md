@@ -1,16 +1,16 @@
 # StellaVita driver inclusion request
 
-Subject: Request to include the EFucoser INDI focuser driver in StellaVita
+Subject: Request to include the IKunFocuser INDI driver in StellaVita
 
 Hello ToupTek/StellaVita team,
 
-Please include the EFucoser electronic focuser driver in a future StellaVita
+Please include the IKunFocuser electronic focuser driver in a future StellaVita
 firmware release.
 
 Driver information:
 
-- INDI device name: `EFucoser Focuser`
-- Executable: `indi_efucoser_focuser`
+- INDI device name: `IKun Focuser`
+- Executable: `indi_ikun_focuser`
 - Device class: Focuser
 - INDI pull request: [fill in]
 - INDI merge commit: [fill in]

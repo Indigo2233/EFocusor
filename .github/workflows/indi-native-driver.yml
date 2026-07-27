@@ -3,11 +3,11 @@ name: INDI native driver
 on:
   push:
     paths:
-      - "indi_efocuser_native/**"
+      - "indi_ikunfocuser_native/**"
       - ".github/workflows/indi-native-driver.yml"
   pull_request:
     paths:
-      - "indi_efocuser_native/**"
+      - "indi_ikunfocuser_native/**"
       - ".github/workflows/indi-native-driver.yml"
 
 jobs:
@@ -18,14 +18,14 @@ jobs:
       - name: Build protocol tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror \
-            -Iindi_efocuser_native \
-            indi_efocuser_native/efucoser_protocol.cpp \
-            indi_efocuser_native/tests/efucoser_protocol_tests.cpp \
-            -o efucoser_protocol_tests
+            -Iindi_ikunfocuser_native \
+            indi_ikunfocuser_native/ikunfocuser_protocol.cpp \
+            indi_ikunfocuser_native/tests/ikunfocuser_protocol_tests.cpp \
+            -o ikunfocuser_protocol_tests
       - name: Run protocol tests
-        run: ./efucoser_protocol_tests
+        run: ./ikunfocuser_protocol_tests
       - name: Check firmware protocol consistency
-        run: python3 -m unittest indi_efocuser_native/tests/test_firmware_protocol_consistency.py
+        run: python3 -m unittest indi_ikunfocuser_native/tests/test_firmware_protocol_consistency.py
 
   indi-core-build:
     runs-on: ubuntu-latest
@@ -41,14 +41,14 @@ jobs:
             libgsl-dev libev-dev libfftw3-dev
       - name: Clone INDI
         run: git clone --depth 1 https://github.com/indilib/indi.git indi-core
-      - name: Stage EFucoser
-        run: python3 indi_efocuser_native/tools/stage_indi_core.py indi-core
+      - name: Stage IKunFocuser
+        run: python3 indi_ikunfocuser_native/tools/stage_indi_core.py indi-core
       - name: Check staged diff
         run: git -C indi-core diff --check
       - name: Configure INDI
         run: cmake -S indi-core -B indi-core/build -G Ninja -DCMAKE_BUILD_TYPE=Release
-      - name: Build EFucoser
-        run: cmake --build indi-core/build --target indi_efucoser_focuser
+      - name: Build IKunFocuser
+        run: cmake --build indi-core/build --target indi_ikun_focuser
 
   firmware-build:
     runs-on: ubuntu-latest
