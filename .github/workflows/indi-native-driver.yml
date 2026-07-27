@@ -38,7 +38,7 @@ jobs:
             build-essential cmake ninja-build git \
             libcfitsio-dev libnova-dev libusb-1.0-0-dev \
             libjpeg-dev libcurl4-gnutls-dev zlib1g-dev \
-            libgsl-dev libev-dev
+            libgsl-dev libev-dev libfftw3-dev
       - name: Clone INDI
         run: git clone --depth 1 https://github.com/indilib/indi.git indi-core
       - name: Stage EFucoser
