@@ -7,8 +7,8 @@ EkOS / KStars, PHD2, and any INDI-compatible client on Linux.
 
 | Property | INDI Name | R/W | Description |
 |---|---|---|---|
-| **Speed** | `FOCUS_SPEED` | R/W | Max speed in steps/sec (1–2000) |
-| **Acceleration** | `ACCELERATION` | R/W | Acceleration in steps/sec² (10–10000) |
+| **Speed** | `FOCUS_SPEED` | R/W | Max speed in steps/sec (1-2000) |
+| **Acceleration** | `ACCELERATION` | R/W | Acceleration in steps/sec^2 (10-10000) |
 | **Max Position** | `FOCUS_MAX` | R/W | Maximum position limit (steps) |
 | **Absolute Position** | `ABS_FOCUS_POSITION` | R/W | Current position and absolute target |
 | **Relative Move** | `REL_FOCUS_POSITION` | R/W | Relative move amount in the selected direction |
@@ -16,7 +16,7 @@ EkOS / KStars, PHD2, and any INDI-compatible client on Linux.
 | **Timer** | `FOCUS_TIMER` | R/W | Timer-based move duration (ms) |
 | **Reverse** | `FOCUS_REVERSE_MOTION` | R/W | Invert motor direction |
 | **Hold** | `HOLD_MODE` | R/W | Continuous hold on/off |
-| **Temperature** | `FOCUS_TEMPERATURE` | R/O | DS18B20 temperature (°C) |
+| **Temperature** | `FOCUS_TEMPERATURE` | R/O | DS18B20 temperature (deg C) |
 | **Abort** | `FOCUS_ABORT_MOTION` | W | Halt movement immediately |
 
 ## Hardware
