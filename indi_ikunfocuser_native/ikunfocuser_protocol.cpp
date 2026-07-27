@@ -140,8 +140,7 @@ bool isErrorResponse(const std::string &response)
 
 bool isSupportedIdentity(const std::string &response)
 {
-    return response.find("IKunFocuser") != std::string::npos ||
-           response.find("EFucoser") != std::string::npos;
+    return response.find("EFucoser") != std::string::npos;
 }
 
 const char *modelForVersion(int version)
@@ -152,7 +151,7 @@ const char *modelForVersion(int version)
         return "ESP8266 ULN2003";
     if (version >= 1000 && version < 1100)
         return "ESP8266 STEP/DIR";
-    return "IKunFocuser";
+    return "EFucoser";
 }
 
 bool isSupportedVersion(int version)

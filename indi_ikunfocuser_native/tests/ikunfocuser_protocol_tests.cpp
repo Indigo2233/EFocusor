@@ -55,10 +55,10 @@ int main()
 
     require(IKunFocuserProtocol::isErrorResponse("ERR:out_of_range#"), "error response detected");
     require(!IKunFocuserProtocol::isErrorResponse("P 1;M false#"), "normal response accepted");
-    require(IKunFocuserProtocol::isSupportedIdentity("IKunFocuser ESP8266 Focuser ver 1005#"),
-            "current identity accepted");
     require(IKunFocuserProtocol::isSupportedIdentity("EFucoser ESP8266 Focuser ver 1005#"),
-            "legacy identity accepted");
+            "firmware identity accepted");
+    require(!IKunFocuserProtocol::isSupportedIdentity("IKunFocuser ESP8266 Focuser ver 1005#"),
+            "driver name is not a firmware identity");
     require(!IKunFocuserProtocol::isSupportedIdentity("Unknown focuser#"), "unknown identity rejected");
     require(std::string(IKunFocuserProtocol::modelForVersion(1005)) == "ESP8266 STEP/DIR", "STEP/DIR model");
     require(std::string(IKunFocuserProtocol::modelForVersion(1103)) == "ESP8266 ULN2003", "ULN2003 model");

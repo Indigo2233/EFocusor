@@ -1,6 +1,6 @@
 # IKunFocuser native INDI driver
 
-Native C++ INDI focuser driver for IKunFocuser controllers. The driver is prepared
+Native C++ INDI driver named IKun Focuser for EFucoser controllers. The driver is prepared
 for submission to the INDI core repository and has no dependencies beyond
 libindi and the C++ standard library.
 

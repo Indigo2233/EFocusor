@@ -39,7 +39,7 @@ class FirmwareProtocolConsistencyTests(unittest.TestCase):
             with self.subTest(controller=name):
                 self.assertRegex(
                     source,
-                    r'#define DEVICE_RESPONSE "IKunFocuser .+ Focuser ver \d+"',
+                    r'#define DEVICE_RESPONSE "EFucoser .+ Focuser ver \d+"',
                 )
 
     def test_required_commands_exist(self):

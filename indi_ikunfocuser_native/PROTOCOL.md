@@ -1,4 +1,4 @@
-# IKunFocuser controller protocol
+# EFucoser controller protocol
 
 ## Transport
 
@@ -16,9 +16,7 @@ Errors use `ERR:<reason>#`.
 
 | Command | Response |
 | --- | --- |
-| `#` | `IKunFocuser <controller> Focuser ver <version>#` |
-
-The INDI driver also accepts the legacy `EFucoser` identification response.
+| `#` | `EFucoser <controller> Focuser ver <version>#` |
 | `V#` | `V <version>#` |
 
 Supported release families:

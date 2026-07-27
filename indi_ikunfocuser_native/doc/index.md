@@ -12,7 +12,8 @@
 
 ## Overview
 
-IKunFocuser is an open hardware electronic focuser controller. The INDI driver
+IKun Focuser is the INDI driver for the open hardware EFucoser electronic
+focuser controller. The driver
 supports the following controller and motor-interface combinations:
 
 | Controller | Minimum firmware | Connection |
@@ -39,7 +40,7 @@ indiserver -vv indi_ikun_focuser
 
 ### USB serial
 
-1. Flash a supported IKunFocuser firmware.
+1. Flash a supported EFucoser firmware.
 2. Connect the controller with a USB data cable.
 3. Ensure the user running `indiserver` has access to the serial device.
 4. Select the controller port in the Connection tab.
@@ -47,12 +48,11 @@ indiserver -vv indi_ikun_focuser
 
 Common port names are `/dev/ttyUSB0` for CH340/FTDI bridges and
 `/dev/ttyACM0` for USB CDC devices. USB bridge VID/PID values are shared by
-many products, so the driver verifies the IKunFocuser identity during handshake.
-Firmware versions using the legacy `EFucoser` identity remain supported.
+many products, so the driver verifies the EFucoser identity during handshake.
 
 ### ESP8266 TCP
 
-1. Connect the INDI host to the IKunFocuser access point or place both systems on
+1. Connect the INDI host to the EFucoser access point or place both systems on
    the same configured Wi-Fi network.
 2. Select TCP in the Connection tab.
 3. Enter the controller address. The access-point default is `192.168.4.1`.

@@ -1,11 +1,11 @@
-# IKunFocuser ESP8266 ULN2003 Firmware Variant
+# EFucoser ESP8266 ULN2003 Firmware Variant
 
 This sketch is the ESP8266 firmware variant for a 35BYJ46 12V geared stepper
 motor driven through a ULN2003 or compatible 4-channel low-side driver board.
 
 The ASCOM driver, TCP protocol, serial protocol, WiFi control page, WebSocket
 status updates, saved position, and DS18B20 temperature reading are kept
-compatible with the main IKunFocuser firmware. The motor control layer uses
+compatible with the main EFucoser firmware. The motor control layer uses
 four phase outputs instead of STEP/DIR/ENABLE.
 
 ## Intended Hardware
@@ -136,7 +136,7 @@ The firmware version for this variant is `1103`, and the identification string
 is:
 
 ```text
-IKunFocuser ESP8266 ULN2003 Focuser ver 1103
+EFucoser ESP8266 ULN2003 Focuser ver 1103
 ```
 
 Version 1103 adds the `X <speed>#` and `A <acceleration>#` commands required by
