@@ -1,0 +1,237 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>EFucoser 电子调焦器</title>
+<style>
+:root{color-scheme:dark;--bg:#111318;--panel:#1a1f28;--panel2:#202734;--line:#384252;--text:#f2f5f8;--muted:#aeb8c6;--accent:#4db6ac;--warn:#f4b24e;--danger:#ee6b63;--ok:#7bc96f}
+body.red{--accent:#cc4444;--ok:#bb3333;--warn:#d4883a;--danger:#881111;--muted:#996666;--text:#eecccc;--panel2:#2a1a1a;--line:#4a3030}
+body.red .progress-fill{background:var(--accent)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;letter-spacing:0;transition:color .3s}
+main{max-width:720px;margin:0 auto;padding:18px 14px 32px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+h1{font-size:22px;margin:0;font-weight:680}
+.status{font-size:13px;color:var(--muted);padding:6px 9px;border:1px solid var(--line);border-radius:999px}
+.grid{display:grid;grid-template-columns:1fr;gap:14px}
+section{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:14px;transition:background .3s,border-color .3s}
+.control-panel{order:1;border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.memory-panel{order:2}
+.settings-panel{order:3}
+.section-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 12px}
+.section-title strong{font-size:16px}
+.section-title .small{text-align:right}
+.control-actions{margin-top:12px}
+.readout{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:76px;transition:background .3s,border-color .3s}
+.metric span{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}
+.metric strong{font-size:22px;line-height:1.2;white-space:nowrap}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+button,input,select{font:inherit}
+button{border:1px solid var(--line);background:#263244;color:var(--text);border-radius:8px;min-height:44px;padding:0 12px;cursor:pointer;transition:background .3s,border-color .3s}
+button:active{transform:translateY(1px)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#111;font-weight:700}
+button.warn{background:var(--warn);border-color:var(--warn);color:#111;font-weight:700}
+button.danger{background:var(--danger);border-color:var(--danger);color:#fcc;font-weight:700}
+button.toggle.active{background:var(--ok);border-color:var(--ok);color:#111;font-weight:700}
+button.night{background:transparent;border-color:transparent;font-size:20px;min-height:36px;padding:0 8px;line-height:1}
+label{display:grid;gap:5px;color:var(--muted);font-size:12px;min-width:0}
+input{width:100%;background:#121720;color:var(--text);border:1px solid var(--line);border-radius:8px;min-height:42px;padding:8px 10px;transition:background .3s}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.wide{grid-column:1/-1}
+.small{font-size:12px;color:var(--muted)}
+.progress-bar{width:100%;height:12px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:8px;transition:background .3s}
+.progress-fill{height:100%;background:var(--accent);border-radius:6px;transition:width .3s,background .3s}
+.memory-list{display:grid;gap:8px}
+.memory-row{display:grid;grid-template-columns:minmax(0,1fr) 92px 72px 72px;gap:8px;align-items:center}
+.memory-position{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.memory-row button{min-height:42px;padding:0 8px}
+@media (max-width:520px){.memory-row{grid-template-columns:minmax(0,1fr) 82px}.memory-row button{grid-row:2}.memory-row button:first-of-type{grid-column:1}.memory-row button:last-of-type{grid-column:2}.memory-position{grid-column:2;grid-row:1}}
+@media (min-width:680px){main{padding-top:26px}.span{grid-column:1/-1}.control-actions{grid-template-columns:repeat(6,1fr)}.control-actions .wide{grid-column:span 3}.control-actions #halt,.control-actions #home,.control-actions #setZero{grid-column:span 2}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>EFucoser 电子调焦器</h1>
+<button class="night" id="nightToggle" title="夜视红光模式">🌙</button>
+<div class="status" id="link">连接中</div>
+</header>
+<div class="grid">
+<section class="span control-panel">
+<div class="section-title"><strong>主控</strong><span class="small">位置与移动</span></div>
+<div class="readout">
+<div class="metric"><span>当前位置</span><strong id="position">--</strong></div>
+<div class="metric"><span>最大行程</span><strong id="maxSteps">--</strong></div>
+<div class="metric"><span>温度</span><strong id="temperature">--</strong></div>
+</div>
+<div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+<div class="form control-actions">
+<label class="wide">目标位置（步）<input id="targetPosition" type="number" min="0" step="1" value="0"></label>
+<button class="primary wide" id="moveAbsolute">移动</button>
+<button data-rel="-1000">-1000</button><button data-rel="-100">-100</button><button data-rel="-10">-10</button>
+<button data-rel="10">+10</button><button data-rel="100">+100</button><button data-rel="1000">+1000</button>
+<button class="danger" id="halt">停止</button><button id="home">回零</button><button id="setZero">设为零点</button>
+</div>
+</section>
+<section class="span memory-panel">
+<div class="section-title"><strong>器材记忆点</strong><span class="small">保存并调用不同器材的对焦位置</span></div>
+<div class="memory-list" id="memoryList"></div>
+</section>
+<section class="span settings-panel">
+<div class="section-title"><strong>配置</strong><span class="small">电机与网络参数</span></div>
+<div class="form">
+<button class="toggle" id="hold">保持力矩</button>
+<button class="toggle" id="reverse">反向</button>
+<label>每圈步数<input id="stepsPerRev" type="number" min="1" step="1"></label>
+<label>最大行程（步）<input id="maxStepsSetting" type="number" min="1" step="1"></label>
+<label>最大速度<input id="maxSpeed" type="number" min="1" max="2000" step="1"></label>
+<label>加速度<input id="acceleration" type="number" min="1" max="10000" step="1"></label>
+<label>手动步长<input id="manualStep" type="number" min="1" step="1"></label>
+<label>联网 Wi-Fi 名称<input id="staSsid" type="text" maxlength="31"></label>
+<label>联网 Wi-Fi 密码<input id="staPassword" type="password" maxlength="63"></label>
+<label>固定 IP<input id="staIp" type="text" maxlength="15" placeholder="留空使用 DHCP"></label>
+<label>网关<input id="staGateway" type="text" maxlength="15" placeholder="192.168.4.1"></label>
+<label>子网掩码<input id="staSubnet" type="text" maxlength="15" placeholder="255.255.255.0"></label>
+<button class="primary wide" id="saveSettings">保存设置</button>
+<div class="small wide" id="settingsMessage"></div>
+<div class="small wide" id="network"></div>
+</div>
+</section>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let state={};
+async function api(path,body){
+ const opt=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
+ const res=await fetch(path,opt);
+ const data=await res.json();
+ if(!res.ok){
+  const error=new Error(data.error||path);
+  error.code=data.error||'request_failed';
+  throw error;
+ }
+ return data;
+}
+function setState(s){
+ state=s;
+ $('position').textContent=String(s.positionSteps??0);
+ $('maxSteps').textContent=String(s.maxSteps??0);
+ const temp=Number(s.lastTemp);
+ $('temperature').textContent=Number.isFinite(temp)?temp.toFixed(2)+' °C':'--';
+ const pct=s.maxSteps>0?((s.positionSteps??0)/s.maxSteps*100):0;
+ $('progressFill').style.width=Math.min(100,Math.max(0,pct))+'%';
+ $('link').textContent=s.isMoving?'正在移动':'就绪';
+ $('hold').classList.toggle('active',!!s.hold);
+ $('reverse').classList.toggle('active',!!s.reversed);
+ $('stepsPerRev').value=s.stepsPerRev??200;
+ if(document.activeElement!==$('maxStepsSetting'))$('maxStepsSetting').value=s.maxSteps??20000;
+ $('maxSpeed').value=s.maxSpeed??800;
+ $('acceleration').value=s.acceleration??1000;
+ $('manualStep').value=s.manualStep??50;
+ if(document.activeElement!==$('staSsid'))$('staSsid').value=s.staSsid||'';
+ if(document.activeElement!==$('staIp'))$('staIp').value=s.staIp||'';
+ if(document.activeElement!==$('staGateway'))$('staGateway').value=s.staGateway||'';
+ if(document.activeElement!==$('staSubnet'))$('staSubnet').value=s.staSubnet||'';
+ const staIp=s.staIp&&s.staIp!=='0.0.0.0'?s.staIp:'未连接';
+ $('network').textContent='热点: '+(s.apIp||'192.168.4.1')+' | 联网: '+staIp+' | TCP: '+(s.tcpPort||4030);
+}
+function renderMemories(data){
+ const list=$('memoryList');
+ list.textContent='';
+ (data.memories||[]).forEach(m=>{
+  const row=document.createElement('div');
+  row.className='memory-row';
+  const name=document.createElement('input');
+  name.type='text';
+  name.maxLength=15;
+  name.value=m.name||('器材 '+(m.slot+1));
+  name.setAttribute('aria-label','器材名称 '+(m.slot+1));
+  const position=document.createElement('div');
+  position.className='memory-position';
+  position.textContent=m.valid?String(m.position)+' 步':'未保存';
+  const save=document.createElement('button');
+  save.textContent='保存';
+  save.onclick=()=>api('/api/memories',{slot:m.slot,action:'save',name:name.value.trim()}).then(renderMemories);
+  const move=document.createElement('button');
+  move.className='primary';
+  move.textContent='移动';
+  move.disabled=!m.valid;
+  move.onclick=()=>api('/api/memories',{slot:m.slot,action:'move'}).then(()=>refresh());
+  row.append(name,position,save,move);
+  list.append(row);
+ });
+}
+async function refresh(){try{setState(await api('/api/status'));}catch(e){$('link').textContent='已断开';}}
+async function refreshMemories(){try{renderMemories(await api('/api/memories'));}catch(_){}}
+function connectWs(){
+ const ws=new WebSocket('ws://'+location.hostname+':81/');
+ ws.onopen=()=>{$('link').textContent='已连接'};
+ ws.onmessage=e=>{try{setState(JSON.parse(e.data));}catch(_){}};
+ ws.onclose=()=>{setTimeout(connectWs,1200);};
+}
+$('moveAbsolute').onclick=()=>api('/api/move',{steps:Number($('targetPosition').value)}).then(setState);
+document.querySelectorAll('[data-rel]').forEach(b=>b.onclick=()=>api('/api/move',{relativeSteps:Number(b.dataset.rel)}).then(setState));
+$('halt').onclick=()=>api('/api/halt',{}).then(setState);
+$('home').onclick=()=>api('/api/home',{}).then(setState);
+$('setZero').onclick=()=>api('/api/set-position',{steps:0}).then(setState);
+$('hold').onclick=()=>api('/api/settings',{hold:!state.hold}).then(setState);
+$('reverse').onclick=()=>api('/api/settings',{reversed:!state.reversed}).then(setState);
+$('saveSettings').onclick=async()=>{
+ const body={
+  stepsPerRev:Number($('stepsPerRev').value),
+  maxSteps:Number($('maxStepsSetting').value),
+  maxSpeed:Number($('maxSpeed').value),
+  acceleration:Number($('acceleration').value),
+  manualStep:Number($('manualStep').value)
+ };
+ if($('staSsid').value.trim())body.staSsid=$('staSsid').value.trim();
+ if($('staPassword').value)body.staPassword=$('staPassword').value;
+ if($('staIp').value.trim())body.staIp=$('staIp').value.trim();
+ if($('staGateway').value.trim())body.staGateway=$('staGateway').value.trim();
+ if($('staSubnet').value.trim())body.staSubnet=$('staSubnet').value.trim();
+ try{
+  setState(await api('/api/settings',body));
+  $('settingsMessage').textContent='设置已保存';
+ }catch(e){
+  $('settingsMessage').textContent=e.code==='max_steps_below_position_or_target'
+   ?'保存失败：最大行程不能小于当前位置或当前目标位置'
+   :'保存失败，请检查输入值';
+ }
+};
+// 夜视红光模式，保存在浏览器本地存储中
+(function(){
+ const night=localStorage.getItem('efucoser_night')==='1';
+ if(night)document.body.classList.add('red');
+ $('nightToggle').textContent=night?'☀️':'🌙';
+ $('nightToggle').onclick=()=>{
+  const on=document.body.classList.toggle('red');
+  $('nightToggle').textContent=on?'☀️':'🌙';
+  localStorage.setItem('efucoser_night',on?'1':'0');
+ };
+})();
+if(location.protocol==='file:'){
+ const previewMemories=[
+  {slot:0,name:'主镜直焦',position:3200,valid:true},
+  {slot:1,name:'减焦镜',position:4860,valid:true},
+  {slot:2,name:'行星相机',position:7280,valid:true},
+  {slot:3,name:'目视观察',position:9100,valid:true},
+  {slot:4,name:'备用器材',position:0,valid:false}
+ ];
+ setState({positionSteps:4860,maxSteps:20000,lastTemp:21.35,isMoving:false,hold:false,reversed:false,stepsPerRev:200,maxSpeed:800,acceleration:1000,manualStep:50});
+ renderMemories({memories:previewMemories});
+ $('link').textContent='本地预览';
+}else{
+ connectWs();
+ refresh();
+ refreshMemories();
+ setInterval(refresh,5000);
+}
+</script>
+</body>
+</html>
+
