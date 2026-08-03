@@ -73,6 +73,7 @@ class IKunFocuser : public INDI::Focuser
         INDI::PropertyText FirmwareTP { 2 };
 
         uint32_t m_LastPosition { 0 };
+        uint32_t m_FixedSpeed { 300 };
         uint8_t m_CommunicationFailures { 0 };
         uint8_t m_TemperaturePollCounter { 0 };
         int m_FirmwareVersion { 0 };

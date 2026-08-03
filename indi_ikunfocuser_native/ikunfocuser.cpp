@@ -36,7 +36,7 @@ IKunFocuser::IKunFocuser()
     setVersion(1, 0);
     setSupportedConnections(CONNECTION_SERIAL | CONNECTION_TCP);
     FI::SetCapability(FOCUSER_CAN_ABS_MOVE | FOCUSER_CAN_REL_MOVE | FOCUSER_CAN_ABORT |
-                      FOCUSER_CAN_SYNC | FOCUSER_CAN_REVERSE | FOCUSER_HAS_VARIABLE_SPEED);
+                      FOCUSER_CAN_SYNC | FOCUSER_CAN_REVERSE);
 }
 
 const char *IKunFocuser::getDefaultName()
@@ -48,10 +48,8 @@ bool IKunFocuser::initProperties()
 {
     INDI::Focuser::initProperties();
 
-    FocusSpeedNP[0].setMin(1);
-    FocusSpeedNP[0].setMax(2000);
-    FocusSpeedNP[0].setStep(10);
-    FocusSpeedNP[0].setValue(800);
+    // Speed is fixed at 300 steps/s for reliable torque with 28BYJ-48.
+    m_FixedSpeed = 300;
 
     FocusMaxPosNP[0].setMin(100);
     FocusMaxPosNP[0].setMax(9999999);
@@ -94,7 +92,8 @@ bool IKunFocuser::updateProperties()
 
         if (readFullState())
         {
-            FocusSpeedNP.apply();
+            // Apply fixed speed on every connect.
+            SetFocuserSpeed(m_FixedSpeed);
             FocusMaxPosNP.apply();
             FocusAbsPosNP.apply();
             FocusReverseSP.apply();
@@ -274,13 +273,6 @@ bool IKunFocuser::readFullState()
     {
         FocusAbsPosNP[0].setValue(integerValue);
         m_LastPosition = static_cast<uint32_t>(integerValue);
-        foundAny = true;
-    }
-
-    if (IKunFocuserProtocol::parseJsonInteger(json, "maxSpeed", integerValue) &&
-            integerValue >= 1 && integerValue <= 2000)
-    {
-        FocusSpeedNP[0].setValue(integerValue);
         foundAny = true;
     }
 
@@ -519,7 +511,6 @@ void IKunFocuser::TimerHit()
     {
         m_TemperaturePollCounter = 0;
         const double previousMaximum = FocusMaxPosNP[0].getValue();
-        const double previousSpeed = FocusSpeedNP[0].getValue();
         const double previousAcceleration = AccelerationNP[0].getValue();
         const double previousTemperature = TemperatureNP[0].getValue();
         const IPState previousTemperatureState = TemperatureNP.getState();
@@ -530,8 +521,6 @@ void IKunFocuser::TimerHit()
         {
             if (FocusMaxPosNP[0].getValue() != previousMaximum)
                 FocusMaxPosNP.apply();
-            if (FocusSpeedNP[0].getValue() != previousSpeed)
-                FocusSpeedNP.apply();
             if (AccelerationNP[0].getValue() != previousAcceleration)
                 AccelerationNP.apply();
             if (TemperatureNP[0].getValue() != previousTemperature ||

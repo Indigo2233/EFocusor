@@ -363,8 +363,8 @@ void loadSettings() {
     settings.position = 0;
     settings.stepsPerRev = 8160;  // Typical 35BYJ46: 96 half-steps * 85 gearbox ratio
     settings.maxSteps = 816000L;  // 100 output shaft revolutions
-    settings.maxSpeed = 800;
-    settings.acceleration = 1000;
+    settings.maxSpeed = 300;
+    settings.acceleration = 300;
     settings.manualMoveStepSize = 100;
     settings.findHomeStepSize = 200;
     settings.hold = false;
@@ -437,10 +437,29 @@ void setReversed(bool reversed) {
 }
 
 void updateMotorOutputs() {
-  if (stepper.distanceToGo() != 0 || findingHome || settings.hold) {
-    stepper.enableOutputs();
+  if (stepper.distanceToGo() != 0 || findingHome) {
+    return; // stepper.run() handles pin states during movement
+  }
+
+  if (settings.hold) {
+    // AccelStepper HALF4WIRE mode has no enable pin; enableOutputs()
+    // is a no-op.  When the coils were previously de-energised we
+    // energise all four phases directly for maximum holding torque.
+    bool pinsOff = (digitalRead(IN1_PIN) == LOW)
+                && (digitalRead(IN2_PIN) == LOW)
+                && (digitalRead(IN3_PIN) == LOW)
+                && (digitalRead(IN4_PIN) == LOW);
+    if (pinsOff) {
+      digitalWrite(IN1_PIN, HIGH);
+      digitalWrite(IN2_PIN, HIGH);
+      digitalWrite(IN3_PIN, HIGH);
+      digitalWrite(IN4_PIN, HIGH);
+    }
   } else {
-    stepper.disableOutputs();
+    digitalWrite(IN1_PIN, LOW);
+    digitalWrite(IN2_PIN, LOW);
+    digitalWrite(IN3_PIN, LOW);
+    digitalWrite(IN4_PIN, LOW);
   }
 }
 

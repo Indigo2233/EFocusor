@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2024–2025 EFucoser Contributors
 """EFucoser Focuser CLI Controller — 命令行控制电调焦"""
 
 import socket

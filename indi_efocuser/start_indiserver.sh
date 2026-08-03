@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2024–2025 EFucoser Contributors
+#
 # Launch INDI server with EFucoser Focuser driver
 # Usage: ./start_indiserver.sh [serial_port]
 

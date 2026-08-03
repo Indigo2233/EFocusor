@@ -43,10 +43,11 @@ pip install pyindi-client pyserial
 ### Method 1: Direct with indiserver
 
 ```bash
-# Start the driver
-indiserver -v indi_efocuser/indi_efocuser_focuser.py
+# Start the driver (wrapper resolves paths automatically)
+indiserver -v indi_efocuser/indi_efocuser_focuser
 
-# Then connect from KStars EkOS or any INDI client
+# Or use the Python driver directly
+indiserver -v indi_efocuser/indi_efocuser_focuser.py
 ```
 
 ### Method 2: Using the launch script
@@ -57,17 +58,33 @@ chmod +x start_indiserver.sh
 ./start_indiserver.sh
 ```
 
-### Method 3: Install as system driver
+### Method 3: Install as system driver (manual)
 
 ```bash
+cd indi_efocuser
+
 # Copy XML to INDI drivers directory
 sudo cp drivers.xml /usr/share/indi/
 
-# Make driver executable
-chmod +x indi_efocuser_focuser.py
+# Make wrapper and driver executable
+chmod +x indi_efocuser_focuser indi_efocuser_focuser.py
 
-# Symlink to INDI scripts directory (optional)
-sudo ln -s $(pwd)/indi_efocuser_focuser.py /usr/share/indi/scripts/
+# Symlink wrapper to a PATH directory so indiserver can find it
+sudo ln -sf "$(pwd)/indi_efocuser_focuser" /usr/local/bin/
+```
+
+### Method 4: Install with CMake (recommended)
+
+```bash
+cd indi_efocuser
+mkdir build && cd build
+cmake -DCMAKE_INSTALL_PREFIX=/usr ..
+sudo make install
+```
+
+After installation, start with:
+```bash
+indiserver -v indi_efocuser_focuser
 ```
 
 ## Connection
@@ -118,5 +135,8 @@ sudo usermod -a -G dialout $USER
 # Log out and back in
 ```
 
-**Driver not found by indiserver**: Use the full path or install the
-driver to `/usr/share/indi/scripts/`.
+**Driver not found by indiserver**: Use the full path to the wrapper script,
+or install it to `/usr/share/indi/scripts/`.
+
+**"Driver not found" when using `indiserver -v indi_efocuser_focuser`**:
+Make sure the wrapper `indi_efocuser_focuser` is in your PATH or use Method 3/4 above.

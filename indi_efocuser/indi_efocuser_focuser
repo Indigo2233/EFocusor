@@ -1,3 +1,8 @@
 #!/bin/bash
-# Wrapper to run INDI driver with venv Python (unbuffered)
-exec /home/suyao/codes/astro/EFocusor/.venv/bin/python -u /home/suyao/codes/astro/EFocusor/indi_efocuser/indi_efocuser_focuser.py "$@"
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2024–2025 EFucoser Contributors
+#
+# Wrapper to run INDI driver with Python (unbuffered)
+# Resolves paths relative to this script's location.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec python3 -u "$DIR/indi_efocuser_focuser.py" "$@"
