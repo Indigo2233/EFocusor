@@ -9,19 +9,21 @@
 #include <math.h>
 
 // Pin definitions - GPIO numbers for NodeMCU/Wemos D1 mini
-// D0=16, D1=5, D2=4, D3=0, D5=14, D6=12, D7=13
-#define STEP_PIN 5   // D1
-#define DIR_PIN 4    // D2
-#define ENABLE_PIN 14 // D5
-#define HALL_PIN 12   // D6
-#define CW_PIN 13     // D7
-#define CCW_PIN 0     // D3 (GPIO0) - NOT D0/GPIO16 (no internal pull-up!)
+// D0=16, D1=5, D2=4, D3=0, D4=2, D5=14, D6=12, D7=13
+#define IN1_PIN 5     // D1 -> ULN2003 IN1
+#define IN2_PIN 4     // D2 -> ULN2003 IN2
+#define IN3_PIN 14    // D5 -> ULN2003 IN3
+#define IN4_PIN 12    // D6 -> ULN2003 IN4
+#define CW_PIN 13     // D7, manual inward button
+#define CCW_PIN 0     // D3 (GPIO0), manual outward button. Must stay HIGH during boot.
 #define TEMP_PIN 2    // D4, DS18B20 DATA with 4.7k pull-up to 3.3V
+#define USE_HALL_SENSOR 0
+#define HALL_PIN 16   // D0, optional Hall input. Requires external 10k pull-up to 3.3V.
 
-#define DEVICE_RESPONSE "EFucoser ESP8266 Focuser ver 1005"
-#define FIRMWARE_VERSION 1005
+#define DEVICE_RESPONSE "EFucoser ESP8266 ULN2003 Focuser ver 1103"
+#define FIRMWARE_VERSION 1103
 #define EEPROM_SIZE 512
-#define SETTINGS_MAGIC 0xEF0C115EUL
+#define SETTINGS_MAGIC 0xEF0C2003UL
 #define MEMORY_MAGIC 0x4D454D35UL
 #define MEMORY_SLOT_COUNT 5
 #define MEMORY_NAME_LENGTH 48
@@ -63,7 +65,7 @@ struct FocuserSettings {
 static_assert(sizeof(FocuserSettings) <= EEPROM_SIZE, "FocuserSettings exceeds EEPROM allocation");
 
 FocuserSettings settings;
-AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
+AccelStepper stepper(AccelStepper::HALF4WIRE, IN1_PIN, IN3_PIN, IN2_PIN, IN4_PIN);
 ESP8266WebServer server(80);
 WebSocketsServer webSocket(WEBSOCKET_PORT);
 WiFiServer tcpServer(ASCOM_TCP_PORT);
@@ -107,14 +109,21 @@ body.red{--accent:#cc4444;--ok:#bb3333;--warn:#d4883a;--danger:#881111;--muted:#
 body.red .progress-fill{background:var(--accent)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;letter-spacing:0;transition:color .3s}
-main{max-width:720px;margin:0 auto;padding:18px 14px 28px}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+main{max-width:720px;margin:0 auto;padding:18px 14px 32px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 h1{font-size:22px;margin:0;font-weight:680}
-.status{font-size:13px;color:var(--muted)}
-.grid{display:grid;grid-template-columns:1fr;gap:10px}
-section{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:12px;transition:background .3s,border-color .3s}
+.status{font-size:13px;color:var(--muted);padding:6px 9px;border:1px solid var(--line);border-radius:999px}
+.grid{display:grid;grid-template-columns:1fr;gap:14px}
+section{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:14px;transition:background .3s,border-color .3s}
+.control-panel{order:1;border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.memory-panel{order:2}
+.settings-panel{order:3}
+.section-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 12px}
+.section-title strong{font-size:16px}
+.section-title .small{text-align:right}
+.control-actions{margin-top:12px}
 .readout{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.metric{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;min-height:76px;transition:background .3s,border-color .3s}
+.metric{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:76px;transition:background .3s,border-color .3s}
 .metric span{display:block;color:var(--muted);font-size:12px;margin-bottom:8px}
 .metric strong{font-size:22px;line-height:1.2;white-space:nowrap}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -139,7 +148,7 @@ input{width:100%;background:#121720;color:var(--text);border:1px solid var(--lin
 .memory-position{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
 .memory-row button{min-height:42px;padding:0 8px}
 @media (max-width:520px){.memory-row{grid-template-columns:minmax(0,1fr) 82px}.memory-row button{grid-row:2}.memory-row button:first-of-type{grid-column:1}.memory-row button:last-of-type{grid-column:2}.memory-position{grid-column:2;grid-row:1}}
-@media (min-width:680px){.grid{grid-template-columns:1fr 1fr}.span{grid-column:1/-1}}
+@media (min-width:680px){main{padding-top:26px}.span{grid-column:1/-1}.control-actions{grid-template-columns:repeat(6,1fr)}.control-actions .wide{grid-column:span 3}.control-actions #halt,.control-actions #home,.control-actions #setZero{grid-column:span 2}}
 </style>
 </head>
 <body>
@@ -150,20 +159,15 @@ input{width:100%;background:#121720;color:var(--text);border:1px solid var(--lin
 <div class="status" id="link">连接中</div>
 </header>
 <div class="grid">
-<section class="span">
+<section class="span control-panel">
+<div class="section-title"><strong>主控</strong><span class="small">位置与移动</span></div>
 <div class="readout">
 <div class="metric"><span>当前位置</span><strong id="position">--</strong></div>
 <div class="metric"><span>最大行程</span><strong id="maxSteps">--</strong></div>
 <div class="metric"><span>温度</span><strong id="temperature">--</strong></div>
 </div>
 <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-</section>
-<section class="span">
-<div class="row"><strong>器材记忆点</strong><span class="small">保存并调用不同器材的对焦位置</span></div>
-<div class="memory-list" id="memoryList"></div>
-</section>
-<section>
-<div class="form">
+<div class="form control-actions">
 <label class="wide">目标位置（步）<input id="targetPosition" type="number" min="0" step="1" value="0"></label>
 <button class="primary wide" id="moveAbsolute">移动</button>
 <button data-rel="-1000">-1000</button><button data-rel="-100">-100</button><button data-rel="-10">-10</button>
@@ -171,7 +175,12 @@ input{width:100%;background:#121720;color:var(--text);border:1px solid var(--lin
 <button class="danger" id="halt">停止</button><button id="home">回零</button><button id="setZero">设为零点</button>
 </div>
 </section>
-<section>
+<section class="span memory-panel">
+<div class="section-title"><strong>器材记忆点</strong><span class="small">保存并调用不同器材的对焦位置</span></div>
+<div class="memory-list" id="memoryList"></div>
+</section>
+<section class="span settings-panel">
+<div class="section-title"><strong>配置</strong><span class="small">电机与网络参数</span></div>
 <div class="form">
 <button class="toggle" id="hold">保持力矩</button>
 <button class="toggle" id="reverse">反向</button>
@@ -217,8 +226,8 @@ function setState(s){
  $('link').textContent=s.isMoving?'正在移动':'就绪';
  $('hold').classList.toggle('active',!!s.hold);
  $('reverse').classList.toggle('active',!!s.reversed);
- $('stepsPerRev').value=s.stepsPerRev??200;
- if(document.activeElement!==$('maxStepsSetting'))$('maxStepsSetting').value=s.maxSteps??20000;
+ $('stepsPerRev').value=s.stepsPerRev??8160;
+ if(document.activeElement!==$('maxStepsSetting'))$('maxStepsSetting').value=s.maxSteps??816000;
  $('maxSpeed').value=s.maxSpeed??800;
  $('acceleration').value=s.acceleration??1000;
  $('manualStep').value=s.manualStep??50;
@@ -303,10 +312,23 @@ $('saveSettings').onclick=async()=>{
   localStorage.setItem('efucoser_night',on?'1':'0');
  };
 })();
-connectWs();
-refresh();
-refreshMemories();
-setInterval(refresh,5000);
+if(location.protocol==='file:'){
+ const previewMemories=[
+  {slot:0,name:'主镜直焦',position:3200,valid:true},
+  {slot:1,name:'减焦镜',position:4860,valid:true},
+  {slot:2,name:'行星相机',position:7280,valid:true},
+  {slot:3,name:'目视观察',position:9100,valid:true},
+  {slot:4,name:'备用器材',position:0,valid:false}
+ ];
+ setState({positionSteps:4860,maxSteps:816000,lastTemp:21.35,isMoving:false,hold:false,reversed:false,stepsPerRev:8160,maxSpeed:800,acceleration:1000,manualStep:100});
+ renderMemories({memories:previewMemories});
+ $('link').textContent='本地预览';
+}else{
+ connectWs();
+ refresh();
+ refreshMemories();
+ setInterval(refresh,5000);
+}
 </script>
 </body>
 </html>
@@ -316,7 +338,7 @@ setInterval(refresh,5000);
 
 void saveSettings() {
   settings.magic = SETTINGS_MAGIC;
-  settings.position = stepper.currentPosition();
+  settings.position = driverToPhysicalSteps(stepper.currentPosition());
   EEPROM.put(0, settings);
   EEPROM.commit();
 }
@@ -339,12 +361,12 @@ void loadSettings() {
     memset(&settings, 0, sizeof(settings));
     settings.magic = SETTINGS_MAGIC;
     settings.position = 0;
-    settings.stepsPerRev = 200;
-    settings.maxSteps = 20000L;  // 200 steps/rev * 100 revs
+    settings.stepsPerRev = 8160;  // Typical 35BYJ46: 96 half-steps * 85 gearbox ratio
+    settings.maxSteps = 816000L;  // 100 output shaft revolutions
     settings.maxSpeed = 800;
     settings.acceleration = 1000;
-    settings.manualMoveStepSize = 50;
-    settings.findHomeStepSize = 100;
+    settings.manualMoveStepSize = 100;
+    settings.findHomeStepSize = 200;
     settings.hold = false;
     settings.reversed = false;
     settings.homeOffsetSteps = 0;
@@ -396,21 +418,40 @@ void loadSettings() {
 void applyMotionSettings() {
   stepper.setMaxSpeed(settings.maxSpeed);
   stepper.setAcceleration(settings.acceleration);
-  stepper.setPinsInverted(settings.reversed, false, false);
 }
 
-void updateEnablePin() {
-  if (stepper.distanceToGo() != 0 || settings.hold) {
-    digitalWrite(ENABLE_PIN, LOW);
+long driverToPhysicalSteps(long driverSteps) {
+  return settings.reversed ? -driverSteps : driverSteps;
+}
+
+long physicalToDriverSteps(long physicalSteps) {
+  return settings.reversed ? -physicalSteps : physicalSteps;
+}
+
+void setReversed(bool reversed) {
+  long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
+  long targetPhysical = driverToPhysicalSteps(stepper.targetPosition());
+  settings.reversed = reversed;
+  stepper.setCurrentPosition(physicalToDriverSteps(currentPhysical));
+  stepper.moveTo(physicalToDriverSteps(targetPhysical));
+}
+
+void updateMotorOutputs() {
+  if (stepper.distanceToGo() != 0 || findingHome || settings.hold) {
+    stepper.enableOutputs();
   } else {
-    digitalWrite(ENABLE_PIN, HIGH);
+    stepper.disableOutputs();
   }
 }
 
 // ==================== Position Helpers ====================
 
 bool hallTriggered() {
+#if USE_HALL_SENSOR
   return digitalRead(HALL_PIN) == LOW;
+#else
+  return false;
+#endif
 }
 
 long logicalToPhysicalSteps(long logicalSteps) {
@@ -431,7 +472,7 @@ void clampHomeOffset() {
 }
 
 void setCurrentLogicalPosition(long logicalSteps) {
-  settings.homeOffsetSteps = stepper.currentPosition() - logicalSteps;
+  settings.homeOffsetSteps = driverToPhysicalSteps(stepper.currentPosition()) - logicalSteps;
   clampHomeOffset();
 }
 
@@ -439,7 +480,8 @@ bool moveToPhysicalSteps(long target) {
   if (target < 0 || target > settings.maxSteps) {
     return false;
   }
-  stepper.moveTo(target);
+  stepper.enableOutputs();
+  stepper.moveTo(physicalToDriverSteps(target));
   positionSaved = false;
   return true;
 }
@@ -456,7 +498,7 @@ String boolText(bool value) {
 }
 
 String statusResponse() {
-  long pos = physicalToLogicalSteps(stepper.currentPosition());
+  long pos = physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition()));
   // Clamp to valid range [0, maxSteps]
   if (pos < 0) pos = 0;
   if (pos > settings.maxSteps) pos = settings.maxSteps;
@@ -514,9 +556,9 @@ String statusJson() {
   json += "\"firmware\":";
   json += FIRMWARE_VERSION;
   json += ",\"positionSteps\":";
-  json += physicalToLogicalSteps(stepper.currentPosition());
+  json += physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition()));
   json += ",\"targetSteps\":";
-  json += physicalToLogicalSteps(stepper.targetPosition());
+  json += physicalToLogicalSteps(driverToPhysicalSteps(stepper.targetPosition()));
   json += ",\"isMoving\":";
   json += boolText(stepper.distanceToGo() != 0 || findingHome);
   json += ",\"home\":";
@@ -613,17 +655,21 @@ String processCommand(String command) {
       broadcastStatus();
       return statusResponse();
     case 'H':
+#if USE_HALL_SENSOR
       findingHome = true;
       homeFound = false;
       broadcastStatus();
       return "H false#";
+#else
+      return "ERR:home_unavailable#";
+#endif
     case 'S':
       stepper.stop();
       findingHome = false;
       broadcastStatus();
       return "S#";
     case 'R':
-      settings.reversed = value != 0;
+      setReversed(value != 0);
       applyMotionSettings();
       saveSettings();
       broadcastStatus();
@@ -631,7 +677,7 @@ String processCommand(String command) {
     case 'C':
       settings.hold = value != 0;
       saveSettings();
-      updateEnablePin();
+      updateMotorOutputs();
       broadcastStatus();
       return String("hold = ") + boolText(settings.hold) + "#";
     case 'V':
@@ -644,7 +690,9 @@ String processCommand(String command) {
         if (value < 100 || value > 9999999L) {
           return "ERR:max_steps#";
         }
-        if (value < stepper.currentPosition() || value < stepper.targetPosition()) {
+        long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
+        long targetPhysical = driverToPhysicalSteps(stepper.targetPosition());
+        if (value < currentPhysical || value < targetPhysical) {
           return "ERR:max_steps_below_position_or_target#";
         }
         settings.maxSteps = value;
@@ -790,7 +838,7 @@ void handleMoveApi() {
   if (extractNumber(body, "steps", value)) {
     ok = moveToLogicalSteps(lround(value));
   } else if (extractNumber(body, "relativeSteps", value)) {
-    long target = physicalToLogicalSteps(stepper.currentPosition()) + lround(value);
+    long target = physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition())) + lround(value);
     if (target < 0) target = 0;
     if (target > settings.maxSteps) target = settings.maxSteps;
     ok = moveToLogicalSteps(target);
@@ -843,11 +891,13 @@ void handleSettingsPostApi() {
 
   if (extractNumber(body, "maxSteps", numberValue)) {
     long newMaxSteps = lround(numberValue);
+    long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
+    long targetPhysical = driverToPhysicalSteps(stepper.targetPosition());
     if (newMaxSteps < 100 || newMaxSteps > 9999999L) {
       sendJson(400, "{\"error\":\"invalid_max_steps\"}");
       return;
     }
-    if (newMaxSteps < stepper.currentPosition() || newMaxSteps < stepper.targetPosition()) {
+    if (newMaxSteps < currentPhysical || newMaxSteps < targetPhysical) {
       sendJson(409, "{\"error\":\"max_steps_below_position_or_target\"}");
       return;
     }
@@ -889,7 +939,7 @@ void handleSettingsPostApi() {
     settings.hold = boolValue;
   }
   if (extractBool(body, "reversed", boolValue)) {
-    settings.reversed = boolValue;
+    setReversed(boolValue);
   }
   if (extractBool(body, "tempComp", boolValue)) {
     settings.tempComp = boolValue;
@@ -903,7 +953,7 @@ void handleSettingsPostApi() {
 
   applyMotionSettings();
   saveSettings();
-  updateEnablePin();
+  updateMotorOutputs();
 
   if (staChanged && strlen(settings.staSsid) > 0) {
     IPAddress ip, gw, sn;
@@ -950,7 +1000,7 @@ void handleMemoriesPostApi() {
       strncpy(settings.memoryNames[slot], name, MEMORY_NAME_LENGTH);
       settings.memoryNames[slot][MEMORY_NAME_LENGTH - 1] = '\0';
     }
-    long position = physicalToLogicalSteps(stepper.currentPosition());
+    long position = physicalToLogicalSteps(driverToPhysicalSteps(stepper.currentPosition()));
     if (position < 0) position = 0;
     if (position > settings.maxSteps) position = settings.maxSteps;
     settings.memoryPositions[slot] = position;
@@ -1086,8 +1136,10 @@ void updateManualButton(int pin, int &lastState, bool &manualFlag, unsigned long
       // Edge-triggered: one move per press (prevents floating-pin runaway)
       manualFlag = true;
       if (!findingHome) {
-        stepper.move(direction * settings.manualMoveStepSize);
-        positionSaved = false;
+        long target = driverToPhysicalSteps(stepper.currentPosition()) + direction * settings.manualMoveStepSize;
+        if (target < 0) target = 0;
+        if (target > settings.maxSteps) target = settings.maxSteps;
+        moveToPhysicalSteps(target);
       }
     } else if (reading == HIGH) {
       manualFlag = false;
@@ -1115,7 +1167,14 @@ void serviceHome() {
     return;
   }
   if (stepper.distanceToGo() == 0) {
-    stepper.moveTo(stepper.currentPosition() - settings.findHomeStepSize);
+    long currentPhysical = driverToPhysicalSteps(stepper.currentPosition());
+    long target = currentPhysical - settings.findHomeStepSize;
+    if (target < 0) {
+      findingHome = false;
+      broadcastStatus();
+      return;
+    }
+    moveToPhysicalSteps(target);
   }
 }
 
@@ -1178,10 +1237,9 @@ void serviceTemperatureSensor() {
 // ==================== Setup & Loop ====================
 
 void setup() {
-  pinMode(STEP_PIN, OUTPUT);
-  pinMode(DIR_PIN, OUTPUT);
-  pinMode(ENABLE_PIN, OUTPUT);
-  pinMode(HALL_PIN, INPUT_PULLUP);
+#if USE_HALL_SENSOR
+  pinMode(HALL_PIN, INPUT);
+#endif
   pinMode(CW_PIN, INPUT_PULLUP);
   pinMode(CCW_PIN, INPUT_PULLUP);
 
@@ -1193,9 +1251,9 @@ void setup() {
   Serial.setTimeout(2000);
 
   loadSettings();
-  stepper.setCurrentPosition(settings.position);
+  stepper.setCurrentPosition(physicalToDriverSteps(settings.position));
   applyMotionSettings();
-  updateEnablePin();
+  updateMotorOutputs();
   setupTemperatureSensor();
 
   setupWifi();
@@ -1223,7 +1281,7 @@ void loop() {
   handleManualButtons();
   serviceHome();
   serviceTemperatureSensor();
-  updateEnablePin();
+  updateMotorOutputs();
   stepper.run();
 
   if (stepper.distanceToGo() == 0 && !positionSaved && !findingHome) {

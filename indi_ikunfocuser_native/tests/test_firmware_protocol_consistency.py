@@ -5,15 +5,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FIRMWARE = {
-    "ESP8266 STEP/DIR": (
-        ROOT / "ESP8266FocuserFirmware" / "ESP8266FocuserFirmware.ino",
-        1005,
-    ),
     "ESP8266 ULN2003": (
-        ROOT
-        / "ESP8266FocuserFirmware_ULN2003"
-        / "ESP8266FocuserFirmware_ULN2003.ino",
+        ROOT / "ESP8266FocuserFirmware" / "ESP8266FocuserFirmware.ino",
         1103,
+    ),
+    "ESP8266 STEP/DIR": (
+        ROOT
+        / "ESP8266FocuserFirmware_STEP_DIR"
+        / "ESP8266FocuserFirmware_STEP_DIR.ino",
+        1005,
     ),
     "Arduino Nano ULN2003": (
         ROOT

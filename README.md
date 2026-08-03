@@ -15,13 +15,18 @@ focuser use with linear position control.
 - WebSocket status updates on port `81`.
 - ASCOM .NET Framework driver implementing `IFocuserV3` with Serial and TCP transport options.
 - Temperature compensation support.
-- Hall sensor homing support.
+- Optional Hall sensor homing support.
 - Manual CW/CCW button support.
 
 ## Repository Layout
 
 - `ESP8266FocuserFirmware/`
-  - Main ESP8266 firmware sketch with embedded web UI.
+  - Main ESP8266 + ULN2003 firmware sketch with embedded web UI.
+- `ESP8266FocuserFirmware_STEP_DIR/`
+  - Compatibility firmware for A4988, DRV8825, TMC2208, and other
+    STEP/DIR/ENABLE drivers.
+- `ArduinoNanoFocuserFirmware_ULN2003/`
+  - Arduino Nano + ULN2003 firmware.
 - `driver/EFucoserFocuserDriver/`
   - ASCOM focuser driver source. Public ASCOM identity: `ASCOM.EFucoser.Focuser`.
 - `driver/FocuserTest/`
@@ -54,19 +59,24 @@ Default ESP8266 board target:
 
 - Wemos D1 mini or NodeMCU
 
-Default wiring (compatible with `electric-caa` rotator):
+Primary ESP8266 firmware wiring:
 
 | Board pad | Connect to | Notes |
 | --- | --- | --- |
-| `D1` / GPIO5 | Stepper driver `STEP`, `PUL`, or `CLK` | 3.3V logic pulse output. |
-| `D2` / GPIO4 | Stepper driver `DIR` | Direction output. Reverse in firmware or web UI if direction is inverted. |
-| `D5` / GPIO14 | Stepper driver `ENABLE` or `ENA` | Active low. The firmware pulls it low when the driver should be enabled. |
-| `D6` / GPIO12 | Hall sensor output | Active low. Sensor output must stay at 3.3V or lower. |
+| `D1` / GPIO5 | ULN2003 `IN1` | Motor phase output. |
+| `D2` / GPIO4 | ULN2003 `IN2` | Motor phase output. |
+| `D5` / GPIO14 | ULN2003 `IN3` | Motor phase output. |
+| `D6` / GPIO12 | ULN2003 `IN4` | Motor phase output. |
 | `D7` / GPIO13 | CW / Inward manual button | Wire the other side of the button to `GND`. |
-| `D0` / GPIO16 | CCW / Outward manual button | Wire the other side of the button to `GND`; add a 10k pull-up from `D0` to `3V3`. |
-| `3V3` | Hall sensor VCC, or driver logic VDD when supported | Use only for low-current 3.3V logic or sensors. |
-| `GND` | Stepper driver logic GND, Hall GND, button common, and 12V supply negative | Common ground is required for STEP/DIR/ENABLE to be valid. |
-| USB or `Vin` | ESP8266 board power | Prefer USB during testing. |
+| `D3` / GPIO0 | CCW / Outward manual button | Wire the other side to `GND`; keep released during boot. |
+| `D4` / GPIO2 | DS18B20 data | Add a 4.7k pull-up to `3V3`. |
+| `D0` / GPIO16 | Optional Hall sensor | Disabled by default; requires an external 10k pull-up to `3V3`. |
+| `GND` | ULN2003 GND, sensor GND, and 12V supply negative | Common ground is required. |
+| 12V supply positive | ULN2003 motor VCC | Intended for a 35BYJ46 12V motor. |
+| USB or 5V input | ESP8266 board power | Keep 12V away from ESP8266 power and GPIO pins. |
+
+The STEP/DIR wiring is documented in
+`ESP8266FocuserFirmware_STEP_DIR/README.md`.
 
 ## Text Protocol (TCP Port 4030 / Serial)
 
@@ -78,7 +88,7 @@ All commands are `#`-terminated:
 | `G#` | Get current position and moving state: `P <steps>;M <true\|false>#` |
 | `M <steps>#` | Move to absolute step position |
 | `P <steps>#` | Set current logical position (offset adjustment) |
-| `H#` | Start homing sequence (seeks Hall sensor) |
+| `H#` | Start optional Hall homing; returns `ERR:home_unavailable#` when disabled |
 | `S#` | Stop movement immediately |
 | `R <0\|1>#` | Set direction inversion |
 | `C <0\|1>#` | Set continuous hold |
@@ -94,7 +104,8 @@ All commands are `#`-terminated:
 
 ### Firmware
 - Arduino IDE with ESP8266 core
-- Libraries: `AccelStepper`, `WebSocketsServer`
+- Libraries: `AccelStepper`, `WebSocketsServer`, `OneWire`,
+  `DallasTemperature`
 
 ### ASCOM Driver
 - Visual Studio with .NET Framework 4.8

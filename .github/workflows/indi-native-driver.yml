@@ -4,10 +4,16 @@ on:
   push:
     paths:
       - "indi_ikunfocuser_native/**"
+      - "ESP8266FocuserFirmware/**"
+      - "ESP8266FocuserFirmware_STEP_DIR/**"
+      - "ArduinoNanoFocuserFirmware_ULN2003/**"
       - ".github/workflows/indi-native-driver.yml"
   pull_request:
     paths:
       - "indi_ikunfocuser_native/**"
+      - "ESP8266FocuserFirmware/**"
+      - "ESP8266FocuserFirmware_STEP_DIR/**"
+      - "ArduinoNanoFocuserFirmware_ULN2003/**"
       - ".github/workflows/indi-native-driver.yml"
 
 jobs:
@@ -67,9 +73,9 @@ jobs:
           arduino-cli lib install "WebSockets@2.7.2"
           arduino-cli lib install "OneWire@2.3.8"
           arduino-cli lib install "DallasTemperature@4.0.6"
-      - name: Build ESP8266 STEP-DIR firmware
+      - name: Build primary ESP8266 ULN2003 firmware
         run: arduino-cli compile --fqbn esp8266:esp8266:d1_mini ESP8266FocuserFirmware
-      - name: Build ESP8266 ULN2003 firmware
-        run: arduino-cli compile --fqbn esp8266:esp8266:d1_mini ESP8266FocuserFirmware_ULN2003
+      - name: Build ESP8266 STEP-DIR compatibility firmware
+        run: arduino-cli compile --fqbn esp8266:esp8266:d1_mini ESP8266FocuserFirmware_STEP_DIR
       - name: Build Arduino Nano ULN2003 firmware
         run: arduino-cli compile --fqbn arduino:avr:nano:cpu=atmega328old ArduinoNanoFocuserFirmware_ULN2003

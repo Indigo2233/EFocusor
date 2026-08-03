@@ -1,6 +1,6 @@
-# EFucoser ESP8266 ULN2003 Firmware Variant
+# EFucoser ESP8266 ULN2003 Main Firmware
 
-This sketch is the ESP8266 firmware variant for a 35BYJ46 12V geared stepper
+This sketch is the primary ESP8266 firmware for a 35BYJ46 12V geared stepper
 motor driven through a ULN2003 or compatible 4-channel low-side driver board.
 
 The ASCOM driver, TCP protocol, serial protocol, WiFi control page, WebSocket
@@ -112,13 +112,13 @@ DallasTemperature
 Compile for Wemos D1 mini:
 
 ```powershell
-arduino-cli compile --fqbn esp8266:esp8266:d1_mini ESP8266FocuserFirmware_ULN2003
+arduino-cli compile --fqbn esp8266:esp8266:d1_mini ESP8266FocuserFirmware
 ```
 
 Compile for NodeMCU 1.0:
 
 ```powershell
-arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 ESP8266FocuserFirmware_ULN2003
+arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 ESP8266FocuserFirmware
 ```
 
 ## Protocol Compatibility
@@ -132,7 +132,7 @@ The following public identities and protocol surfaces are retained:
 - AP password: `012345678`
 - ASCOM driver can use the same TCP or serial protocol
 
-The firmware version for this variant is `1103`, and the identification string
+The firmware version is `1103`, and the identification string
 is:
 
 ```text

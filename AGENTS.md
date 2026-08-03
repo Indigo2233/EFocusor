@@ -5,7 +5,9 @@ This repository contains firmware, ASCOM driver code, and test utilities for the
 ## Project Map
 
 - `ESP8266FocuserFirmware/`
-  - ESP8266 Arduino sketch with AP+STA WiFi, mobile web UI, HTTP API, WebSocket status updates, TCP ASCOM-compatible text protocol, and serial debug protocol.
+  - Primary ESP8266 + ULN2003 Arduino sketch with AP+STA WiFi, mobile web UI, HTTP API, WebSocket status updates, TCP ASCOM-compatible text protocol, and serial debug protocol.
+- `ESP8266FocuserFirmware_STEP_DIR/`
+  - Compatibility ESP8266 firmware for STEP/DIR/ENABLE motor drivers.
 - `driver/EFucoserFocuserDriver/`
   - ASCOM .NET Framework focuser driver source implementing `IFocuserV3`.
 - `driver/FocuserTest/`
@@ -33,16 +35,21 @@ Expected Arduino environment:
 
 - Board: Wemos D1 mini or NodeMCU
 - Arduino ESP8266 core
-- Libraries: `AccelStepper`, `WebSocketsServer`
+- Libraries: `AccelStepper`, `WebSocketsServer`, `OneWire`, `DallasTemperature`
 
 Core behavior:
 
-- Uses `AccelStepper::DRIVER` with STEP/DIR/ENABLE pins.
-- Stores settings in EEPROM with `SETTINGS_MAGIC` = `0xEF0C115E`.
-- Default `maxSteps` = 20000 (200 steps/rev × 100 revolutions).
-- Default `stepsPerRev` = 200 for a typical 1.8° stepper.
+- Uses `AccelStepper::HALF4WIRE` with a ULN2003 board.
+- Main wiring: D1/GPIO5 to IN1, D2/GPIO4 to IN2, D5/GPIO14 to IN3,
+  and D6/GPIO12 to IN4.
+- Stores settings in EEPROM with `SETTINGS_MAGIC` = `0xEF0C2003`.
+- Default `maxSteps` = 816000.
+- Default `stepsPerRev` = 8160 for a typical 35BYJ46 `7.5° / 85` geared
+  stepper in half-step mode.
 - Position is linear from 0 to maxSteps. No angular conversion.
-- The Hall sensor provides homing: `Home` command seeks the sensor, then returns to position 0.
+- The optional Hall sensor uses D0/GPIO16 and is disabled by default.
+- With Hall disabled, the web Home action returns to the saved logical zero and
+  protocol homing returns `ERR:home_unavailable#`.
 - `Set 0` stores `homeOffsetSteps` to define a logical zero.
 - The mobile web page is embedded in `INDEX_HTML` and served from `/`.
 - Status JSON at `GET /api/status`. Movement via `POST /api/move`.
@@ -53,7 +60,7 @@ Text commands (`#`-terminated):
 - `G#`: current position and moving state (`P <steps>;M <true|false>#`)
 - `M <steps>#`: move to absolute step position
 - `P <steps>#`: set current logical step position
-- `H#`: start homing
+- `H#`: start optional Hall homing; returns `ERR:home_unavailable#` when disabled
 - `S#`: stop movement
 - `R <0|1>#`: set direction inversion
 - `C <0|1>#`: set continuous hold
@@ -68,9 +75,11 @@ Text commands (`#`-terminated):
 Hardware constraints:
 
 - ESP8266 GPIO is 3.3V logic only.
-- Motor supply uses external 12V.
-- Shared GND between ESP8266, driver logic, and 12V negative.
+- The intended 35BYJ46 motor receives external 12V through ULN2003 motor VCC.
+- Shared GND between ESP8266, ULN2003, sensors, and 12V negative.
 - 12V isolated from ESP8266 5V, 3.3V, GPIO.
+- The legacy STEP/DIR firmware is
+  `ESP8266FocuserFirmware_STEP_DIR/ESP8266FocuserFirmware_STEP_DIR.ino`.
 
 ## ASCOM Driver Notes
 
