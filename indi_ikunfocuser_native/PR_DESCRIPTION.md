@@ -35,12 +35,12 @@ external dependency. Source files are licensed LGPL-2.1-or-later.
 
 ## Validation
 
-- Protocol parser unit tests
-- INDI core Linux build
-- Real hardware tests with: [fill in controller and motor]
-- KStars/Ekos: [fill in version and result]
-- INDI Web Manager: [fill in version and result]
-- Architecture: [fill in x86_64 and ARM64 results]
+- Protocol parser unit tests: ✅ all pass
+- INDI core Linux build: ✅ x86_64 on Arch Linux (kernel 7.1.5, indi v2.2.4)
+- Real hardware tests with: ESP8266 Wemos D1 mini + 28BYJ-48 + ULN2003, firmware 1103
+- KStars/Ekos: ✅ connect/disconnect, absolute/relative move, abort, sync, reverse, hold, temperature (DS18B20)
+- Speed: fixed at 300 step/s for reliable torque with 28BYJ-48 + telescope focuser load
+- Architecture: x86_64 ✅, ARM64 pending
 
 ## Related project
 
